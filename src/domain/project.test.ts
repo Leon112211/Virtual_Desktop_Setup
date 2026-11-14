@@ -57,6 +57,13 @@ describe('尺寸与放置', () => {
     monitor.lift = 1;
     expect(projectSchema.safeParse(p).success).toBe(false);
   });
+  it('屏幕挂灯作为内置物品可加入并通过校验', () => {
+    const p = defaultProject();
+    const bar = makeItem('lightbar');
+    expect(bar.kind).toBe('lightbar');
+    p.items.push(bar);
+    expect(projectSchema.safeParse(p).success).toBe(true);
+  });
 });
 describe('编辑历史', () => {
   beforeEach(() => useEditor.getState().replace(defaultProject(), new Map()));

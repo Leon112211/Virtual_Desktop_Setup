@@ -47,6 +47,14 @@ export const catalog: {
     color: '#c9d6e5',
     category: '数码设备',
   },
+  {
+    kind: 'lightbar',
+    name: '屏幕挂灯',
+    subtitle: '照亮屏幕前的一方桌面',
+    size: { width: 0.56, height: 0.21, depth: 0.08 },
+    color: '#b9c0c9',
+    category: '数码设备',
+  },
 ];
 export function makeItem(kind: BuiltinKind): SceneItem {
   const entry = catalog.find((e) => e.kind === kind)!;

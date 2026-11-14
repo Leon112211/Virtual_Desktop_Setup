@@ -79,6 +79,15 @@ export function ModelThumbnail({ kind }: { kind: BuiltinKind | 'imported' }) {
           <path d="m83 28 15-2 1 21-15 2z" fill="#bc9f77" />
           <path d="m46 74-8 5 17 2 11-5m27-7-5 5 17 2 9-5" stroke="#b8bfbd" strokeWidth="3" />
         </>
+      ) : kind === 'lightbar' ? (
+        <>
+          <rect x="21" y="16" width="98" height="13" rx="6.5" fill="#aeb6c2" />
+          <rect x="27" y="21" width="86" height="4" rx="2" fill="#eef2f7" />
+          <rect x="19" y="14" width="7" height="17" rx="3" fill="#3c4450" />
+          <rect x="114" y="14" width="7" height="17" rx="3" fill="#3c4450" />
+          <rect x="64" y="29" width="8" height="30" rx="3" fill="#4a525e" />
+          <path d="M64 59h9v6h9l4 4-4 4h-18z" fill="#39414d" />
+        </>
       ) : (
         <>
           <path d="m70 12 38 21v35L70 81 33 61V27z" fill="#c3d2e6" />

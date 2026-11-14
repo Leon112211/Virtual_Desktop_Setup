@@ -1,5 +1,12 @@
 import { z } from 'zod';
-export const kinds = ['monitor', 'speaker', 'controller', 'pegboard', 'keyboard'] as const;
+export const kinds = [
+  'monitor',
+  'speaker',
+  'controller',
+  'pegboard',
+  'keyboard',
+  'lightbar',
+] as const;
 export type BuiltinKind = (typeof kinds)[number];
 // Conservative per-kind ceilings, including rounded faces and small details.
 // Keep these aligned with BuiltinModels' subdivision settings.
@@ -9,6 +16,7 @@ export const builtinTriangleBudget: Record<BuiltinKind, number> = {
   controller: 4000,
   pegboard: 15000,
   keyboard: 20000,
+  lightbar: 5000,
 };
 const finite = z.number().finite();
 const color = z.string().regex(/^#[0-9a-f]{6}$/i);

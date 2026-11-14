@@ -4,6 +4,7 @@ import { Group, Plane, Raycaster, Vector2, Vector3 } from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import type { AssetMeta, SceneItem as ItemData } from '../domain/project';
 import { BuiltinModel } from './BuiltinModels';
+import { LightBarModel } from './LightBarModel';
 import { MonitorModel } from './MonitorModel';
 import { useEditor } from '../store/editorStore';
 import { loadCachedModel, modelCache } from '../assets/modelCache';
@@ -175,6 +176,10 @@ export function SceneItem({
           roll={item.roll}
           lift={item.lift}
         />
+      ) : item.kind === 'lightbar' ? (
+        <group scale={[item.size.width, item.size.height, item.size.depth]}>
+          <LightBarModel color={item.color} />
+        </group>
       ) : item.kind !== 'imported' ? (
         <group scale={[item.size.width, item.size.height, item.size.depth]}>
           <BuiltinModel kind={item.kind} color={item.color} />

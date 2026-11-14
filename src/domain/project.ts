@@ -37,6 +37,11 @@ export const itemSchema = z
     x: finite.min(-5).max(5),
     z: finite.min(-5).max(5),
     rotation: finite.min(-36000).max(36000),
+    // Monitor-only screen pose: tilt (俯仰), pivot/portrait (旋转), and the
+    // screen's raise above the stand (屏幕高度). Yaw reuses `rotation`.
+    pitch: finite.min(-45).max(45).optional(),
+    roll: finite.min(-90).max(90).optional(),
+    lift: finite.min(0).max(0.25).optional(),
     size: sizeSchema,
     color,
   })

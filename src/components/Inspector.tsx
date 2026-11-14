@@ -4,6 +4,7 @@ import {
   Trash2,
   SlidersHorizontal,
   MoveHorizontal,
+  Move3d,
   RotateCcw,
   TriangleAlert,
   Ruler,
@@ -13,7 +14,11 @@ import { useEditor } from '../store/editorStore';
 import { cm, meters, type Size } from '../domain/project';
 import { isOutOfBounds } from '../domain/placement';
 import {
+  MAX_LIFT,
+  MAX_PITCH,
+  MAX_ROLL,
   monitorParts,
+  monitorPose,
   monitorPresets,
   monitorPresetId,
   monitorSize,
@@ -98,6 +103,7 @@ export default function Inspector({ onError }: { onError: (m: string) => void })
   const desk = project.desk;
   const isMonitor = item?.kind === 'monitor';
   const monitor = isMonitor ? monitorParts(item.size) : null;
+  const pose = isMonitor && item ? monitorPose(item.size, item) : null;
   function safe(fn: () => void) {
     try {
       fn();
@@ -283,6 +289,46 @@ export default function Inspector({ onError }: { onError: (m: string) => void })
           )}
           {!item && <p className="field-note">高度以桌面上表面为准，桌上物品会随之移动。</p>}
         </section>
+        {isMonitor && item && pose && (
+          <section className="property-section">
+            <h4>
+              <Move3d size={15} />
+              屏幕姿态
+            </h4>
+            <div className="field-grid">
+              <NumberField
+                label="俯仰角度"
+                value={pose.pitchDeg}
+                min={-MAX_PITCH}
+                max={MAX_PITCH}
+                step={5}
+                unit="°"
+                onChange={(v) => safe(() => updateItem(item.id, { pitch: v }))}
+              />
+              <NumberField
+                label="屏幕翻转"
+                value={pose.rollDeg}
+                min={-MAX_ROLL}
+                max={MAX_ROLL}
+                step={5}
+                unit="°"
+                onChange={(v) => safe(() => updateItem(item.id, { roll: v }))}
+              />
+              <NumberField
+                label="屏幕高度"
+                value={cm(pose.lift)}
+                min={0}
+                max={cm(MAX_LIFT)}
+                step={0.5}
+                unit="cm"
+                onChange={(v) => safe(() => updateItem(item.id, { lift: meters(v) }))}
+              />
+            </div>
+            <p className="field-note">
+              俯仰、翻转与升降作用于屏幕，支架随之伸缩；左右转向请用下方的绕竖轴旋转。
+            </p>
+          </section>
+        )}
         {item && (
           <>
             <section className="property-section">

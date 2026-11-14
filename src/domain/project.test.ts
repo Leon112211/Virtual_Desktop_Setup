@@ -44,6 +44,19 @@ describe('尺寸与放置', () => {
     p.items[0].assetId = 'missing';
     expect(projectSchema.safeParse(p).success).toBe(false);
   });
+  it('显示器屏幕姿态在允许范围内可保存，越界被拒绝', () => {
+    const p = defaultProject();
+    const monitor = p.items.find((i) => i.kind === 'monitor')!;
+    monitor.pitch = 30;
+    monitor.roll = -90;
+    monitor.lift = 0.12;
+    expect(projectSchema.safeParse(p).success).toBe(true);
+    monitor.pitch = 90;
+    expect(projectSchema.safeParse(p).success).toBe(false);
+    monitor.pitch = 30;
+    monitor.lift = 1;
+    expect(projectSchema.safeParse(p).success).toBe(false);
+  });
 });
 describe('编辑历史', () => {
   beforeEach(() => useEditor.getState().replace(defaultProject(), new Map()));

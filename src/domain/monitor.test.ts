@@ -1,7 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import {
+  MAX_LIFT,
+  MAX_PITCH,
+  MAX_ROLL,
   MIN_STAND,
   monitorParts,
+  monitorPose,
   monitorPresetId,
   monitorPresets,
   monitorSize,
@@ -50,5 +54,37 @@ describe('显示器尺寸', () => {
     const preset = monitorPresets.find((p) => p.id === '24')!;
     expect(monitorPresetId(preset.size)).toBe('24');
     expect(monitorPresetId({ ...preset.size, width: preset.size.width + 0.01 })).toBeNull();
+  });
+});
+
+describe('屏幕姿态', () => {
+  const size = monitorPresets.find((p) => p.id === '27')!.size;
+
+  it('未设置姿态时保持默认（不倾斜、不升高）', () => {
+    const pose = monitorPose(size);
+    expect(pose.pitchDeg).toBe(0);
+    expect(pose.rollDeg).toBe(0);
+    expect(pose.lift).toBe(0);
+    expect(pose.pivotY).toBeCloseTo(monitorParts(size).standHeight, 3);
+    expect(pose.totalHeight).toBeCloseTo(size.height, 3);
+  });
+
+  it('升降抬高枢轴与总高度，屏幕本身尺寸不变', () => {
+    const lift = 0.1;
+    const pose = monitorPose(size, { lift });
+    expect(pose.lift).toBeCloseTo(lift, 3);
+    expect(pose.pivotY).toBeCloseTo(monitorParts(size).standHeight + lift, 3);
+    expect(pose.totalHeight).toBeCloseTo(size.height + lift, 3);
+  });
+
+  it('超出范围的角度与升降被钳制到边界', () => {
+    const pose = monitorPose(size, { pitch: 90, roll: -180, lift: 1 });
+    expect(pose.pitchDeg).toBe(MAX_PITCH);
+    expect(pose.rollDeg).toBe(-MAX_ROLL);
+    expect(pose.lift).toBe(MAX_LIFT);
+    const clamped = monitorPose(size, { pitch: -90, roll: 180, lift: -0.5 });
+    expect(clamped.pitchDeg).toBe(-MAX_PITCH);
+    expect(clamped.rollDeg).toBe(MAX_ROLL);
+    expect(clamped.lift).toBe(0);
   });
 });

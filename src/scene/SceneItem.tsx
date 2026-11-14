@@ -168,7 +168,13 @@ export function SceneItem({
       }}
     >
       {item.kind === 'monitor' ? (
-        <MonitorModel size={item.size} color={item.color} />
+        <MonitorModel
+          size={item.size}
+          color={item.color}
+          pitch={item.pitch}
+          roll={item.roll}
+          lift={item.lift}
+        />
       ) : item.kind !== 'imported' ? (
         <group scale={[item.size.width, item.size.height, item.size.depth]}>
           <BuiltinModel kind={item.kind} color={item.color} />
@@ -201,9 +207,20 @@ export function SceneItem({
               depthWrite={false}
             />
           </mesh>
-          <mesh position={[0, item.size.height / 2, 0]} raycast={() => null}>
+          <mesh
+            position={[
+              0,
+              (item.size.height + (item.kind === 'monitor' ? (item.lift ?? 0) : 0)) / 2,
+              0,
+            ]}
+            raycast={() => null}
+          >
             <boxGeometry
-              args={[item.size.width + 0.006, item.size.height + 0.006, item.size.depth + 0.006]}
+              args={[
+                item.size.width + 0.006,
+                item.size.height + (item.kind === 'monitor' ? (item.lift ?? 0) : 0) + 0.006,
+                item.size.depth + 0.006,
+              ]}
             />
             <meshBasicMaterial
               color={outside ? '#b63d43' : '#315ce7'}

@@ -6,6 +6,10 @@ import type { Size } from './project';
 // the desk and stays fixed when the screen size changes, like a real monitor.
 export const MONITOR_BEZEL = 0.006; // 0.6 cm per side
 export const MIN_STAND = 0.02; // stand cannot collapse below 2 cm
+// Screen pose limits, in the units the inspector edits them (degrees / metres).
+export const MAX_PITCH = 45; // screen tilt up/down (±45°)
+export const MAX_ROLL = 90; // screen pivot to portrait (±90°)
+export const MAX_LIFT = 0.25; // screen raise above the stand (25 cm)
 
 export type MonitorPresetId = '24' | '27' | '32';
 
@@ -43,6 +47,34 @@ export function monitorSize(panelWidth: number, standHeight: number, depth: numb
 export function screenInches(size: Size): number {
   const { screenWidth, screenHeight } = monitorParts(size);
   return (Math.hypot(screenWidth, screenHeight) * 100) / 2.54;
+}
+
+// A monitor's articulated screen pose. Pitch/roll/lift are monitor-only and are
+// clamped here (the schema also bounds them) so the renderer and inspector can
+// trust the values even when reading an untrusted project file.
+export interface MonitorPose {
+  pitchDeg: number; // tilt about the horizontal left–right axis
+  rollDeg: number; // pivot about the front–back axis (portrait)
+  lift: number; // screen raise above the stand, in metres
+  pivotY: number; // screen pivot height above the desk, in metres
+  totalHeight: number; // whole monitor height including the raise
+}
+export function monitorPose(
+  size: Size,
+  pose?: { pitch?: number; roll?: number; lift?: number },
+): MonitorPose {
+  const { standHeight } = monitorParts(size);
+  const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
+  const lift = clamp(pose?.lift ?? 0, 0, MAX_LIFT);
+  const pitchDeg = clamp(pose?.pitch ?? 0, -MAX_PITCH, MAX_PITCH);
+  const rollDeg = clamp(pose?.roll ?? 0, -MAX_ROLL, MAX_ROLL);
+  return {
+    pitchDeg,
+    rollDeg,
+    lift,
+    pivotY: standHeight + lift,
+    totalHeight: size.height + lift,
+  };
 }
 
 // Which preset a size matches exactly, if any (used to highlight the buttons).

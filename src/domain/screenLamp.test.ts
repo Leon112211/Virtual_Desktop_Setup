@@ -14,6 +14,7 @@ import { useEditor } from '../store/editorStore';
 function fixture(monitorCount = 1, lampCount = 1): Project {
   const project = defaultProject();
   delete project.environment;
+  delete project.cables;
   const monitors = Array.from({ length: monitorCount }, () => makeItem('monitor'));
   project.items = [
     ...monitors,

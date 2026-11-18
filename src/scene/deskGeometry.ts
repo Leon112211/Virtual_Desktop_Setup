@@ -17,6 +17,28 @@ export function deskBevelSize(thickness: number): number {
   return Math.min(0.005, thickness * 0.25);
 }
 
+function applyDeskWorldUVs(geometry: ExtrudeGeometry): void {
+  const pos = geometry.attributes.position;
+  const norm = geometry.attributes.normal;
+  const uv = geometry.attributes.uv;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const y = pos.getY(i);
+    const z = pos.getZ(i);
+    const nx = Math.abs(norm.getX(i));
+    const ny = Math.abs(norm.getY(i));
+    const nz = Math.abs(norm.getZ(i));
+    if (ny >= 0.5) {
+      uv.setXY(i, x / 1.4 + 0.5, -z / 0.7 + 0.5);
+    } else if (nx > nz) {
+      uv.setXY(i, z / 1.4 + 0.5, y / 0.7 + 0.5);
+    } else {
+      uv.setXY(i, x / 1.4 + 0.5, y / 0.7 + 0.5);
+    }
+  }
+  uv.needsUpdate = true;
+}
+
 /**
  * Builds a single closed extruded desktop mesh geometry spanning local Y in [0, desk.thickness],
  * supporting both rectangular and L-shaped desks with R5 cm front-side corner fillets and optional grommet hole.
@@ -101,28 +123,7 @@ export function buildDeskTopGeometry(desk: Desk): ExtrudeGeometry {
 
   geometry.rotateX(-Math.PI / 2);
   geometry.translate(0, bevel, 0);
-
-  // Map UVs continuously in physical world metres matching the default 1.4 m × 0.7 m wood scale.
-  const pos = geometry.attributes.position;
-  const norm = geometry.attributes.normal;
-  const uv = geometry.attributes.uv;
-  for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i);
-    const y = pos.getY(i);
-    const z = pos.getZ(i);
-    const nx = Math.abs(norm.getX(i));
-    const ny = Math.abs(norm.getY(i));
-    const nz = Math.abs(norm.getZ(i));
-    if (ny >= 0.5) {
-      uv.setXY(i, x / 1.4 + 0.5, -z / 0.7 + 0.5);
-    } else if (nx > nz) {
-      uv.setXY(i, z / 1.4 + 0.5, y / 0.7 + 0.5);
-    } else {
-      uv.setXY(i, x / 1.4 + 0.5, y / 0.7 + 0.5);
-    }
-  }
-  uv.needsUpdate = true;
-
+  applyDeskWorldUVs(geometry);
   geometry.computeBoundingBox();
   geometry.computeBoundingSphere();
   return geometry;
@@ -284,6 +285,7 @@ function extrudeDeskRibbon(
   });
   geometry.rotateX(-Math.PI / 2);
   geometry.translate(0, bevel, 0);
+  applyDeskWorldUVs(geometry);
   geometry.computeBoundingBox();
   geometry.computeBoundingSphere();
   return geometry;

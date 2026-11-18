@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { defaultProject } from './catalog';
+import { defaultProject, makeItem } from './catalog';
 import {
   applyArmBaseSolutionToProject,
   applyArmSolutionToProject,
@@ -26,7 +26,7 @@ import {
 import { useEditor } from '../store/editorStore';
 
 describe('显示器支架臂固定机械参数、实时跟随与物理极限模拟', () => {
-  beforeEach(() => useEditor.getState().replace(defaultProject(), new Map()));
+  beforeEach(() => useEditor.getState().replace({ ...defaultProject(), cables: [] }, new Map()));
 
   it('底座夹持坐标固定不随显示器移动漂移，且双长臂保持精确固定连杆长度', () => {
     const s = () => useEditor.getState();
@@ -246,7 +246,8 @@ describe('显示器支架臂固定机械参数、实时跟随与物理极限模�
     expect(normalizeRotationDeg(180)).toBe(180);
 
     const p = defaultProject();
-    const kb = p.items.find((i) => i.kind === 'keyboard')!;
+    const kb = makeItem('keyboard');
+    p.items.push(kb);
     const previewed = applyDragPreview(p.items, {
       kind: 'rotation',
       id: kb.id,

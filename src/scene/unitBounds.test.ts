@@ -39,6 +39,7 @@ it('拒绝没有几何体的内置边界', () => {
 
 it('复杂键盘的场景预算不能按简单物品低估', () => {
   const project = defaultProject();
+  delete project.cables;
   project.items = Array.from({ length: 20 }, () => makeItem('keyboard'));
   expect(projectSchema.safeParse(project).success).toBe(true);
   project.items = Array.from({ length: 26 }, () => makeItem('keyboard'));

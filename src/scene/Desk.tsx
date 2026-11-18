@@ -113,6 +113,7 @@ export function Desk({ desk }: { desk: DeskData }) {
   const partLeft = Boolean(partitions?.left);
   const partRight = Boolean(partitions?.right);
   const partHeight = partitions?.height ?? 0;
+  const isFrostedPartitions = partitions?.material === 'frosted';
   const shelf = !desk.return && desk.shelf?.enabled ? desk.shelf : undefined;
   const shelfThickness = Math.min(0.024, Math.max(0.016, t * 0.8));
 
@@ -212,14 +213,36 @@ export function Desk({ desk }: { desk: DeskData }) {
 
       {partitionGeos && (
         <group>
-          {/* 与桌体倒角无缝包覆的一体化声学围挡（单几何连续拐角，无拼缝割裂） */}
+          {/* 与桌体倒角无缝包覆的一体化侧板与后板（支持与桌面一致材质或半透明磨砂板材） */}
           <mesh
+            name="desk-partitions-mesh"
             geometry={partitionGeos.wallGeometry}
             position={[0, h - 0.001, 0]}
-            castShadow
+            castShadow={!isFrostedPartitions}
             receiveShadow
           >
-            <meshStandardMaterial color="#6f8096" roughness={0.88} metalness={0.02} />
+            {isFrostedPartitions ? (
+              <meshPhysicalMaterial
+                key="frosted"
+                color="#e8eff6"
+                transparent
+                opacity={0.46}
+                roughness={0.62}
+                metalness={0.04}
+                ior={1.49}
+                reflectivity={0.45}
+                clearcoat={0.22}
+                clearcoatRoughness={0.46}
+                depthWrite={false}
+              />
+            ) : (
+              <meshStandardMaterial
+                key={matKey}
+                color={matColor}
+                map={wood ?? undefined}
+                roughness={matRoughness}
+              />
+            )}
           </mesh>
           {/* 包覆桌缘厚度的底层密封压条裙边（咬合桌面斜倒角，消除缝隙） */}
           <mesh
@@ -243,26 +266,14 @@ export function Desk({ desk }: { desk: DeskData }) {
 
       {shelf &&
         (() => {
-          const shelfBottomY = h + shelf.height - shelfThickness;
           const shelfMidZ = -d / 2 + shelf.depth / 2;
           const hasBaffleSupport = partBack || partLeft || partRight;
-          const rearBracketXs = w >= 1.6 ? [-w * 0.34, 0, w * 0.34] : [-w * 0.3, w * 0.3];
-          const armLen = Math.min(shelf.depth * 0.78, 0.22);
-          const rearDrop = Math.min(0.088, Math.max(0.03, shelf.height - shelfThickness - 0.015));
-          const strutDz = Math.max(0.02, armLen * 0.78 - 0.006);
-          const strutDy = Math.max(0.01, rearDrop - 0.014);
-          const strutLen = Math.hypot(strutDz, strutDy);
-          const strutRotX = -Math.atan2(strutDy, strutDz);
-          const sideDrop = partBack
-            ? Math.min(0.034, Math.max(0.018, shelf.height - shelfThickness - 0.01))
-            : Math.min(0.068, Math.max(0.026, shelf.height - shelfThickness - 0.015));
-          const sideRailLen = Math.max(0.04, shelf.depth - 0.032);
-          const activeSideSigns = [...(partLeft ? [-1] : []), ...(partRight ? [1] : [])];
 
           return (
             <group>
-              {/* 与主桌等宽的一体平行层架（依附在后侧/两侧挡板内壁上，桌底悬空无独立落地腿） */}
+              {/* 与主桌等宽的一体平行顶板（直接嵌合在侧板与后板内壁上，干净无多余支撑角码/导轨） */}
               <RoundedBox
+                name="desk-shelf-mesh"
                 args={[w - (hasBaffleSupport ? 0.002 : 0), shelfThickness, shelf.depth]}
                 radius={0.004}
                 smoothness={2}
@@ -277,79 +288,6 @@ export function Desk({ desk }: { desk: DeskData }) {
                   roughness={matRoughness}
                 />
               </RoundedBox>
-
-              {/* 依附于后挡板的壁挂三角悬臂支架 */}
-              {partBack &&
-                rearBracketXs.map((bx, i) => (
-                  <group key={`rear-bracket-${i}`} position={[bx, shelfBottomY, -d / 2]}>
-                    <mesh position={[0, -rearDrop / 2, 0.004]} castShadow receiveShadow>
-                      <boxGeometry args={[0.018, rearDrop, 0.008]} />
-                      <meshStandardMaterial color="#cfd6de" metalness={0.48} roughness={0.38} />
-                    </mesh>
-                    <mesh position={[0, -0.0045, armLen / 2]} castShadow receiveShadow>
-                      <boxGeometry args={[0.016, 0.009, armLen]} />
-                      <meshStandardMaterial color="#cfd6de" metalness={0.48} roughness={0.38} />
-                    </mesh>
-                    <mesh
-                      position={[0, -0.007 - strutDy / 2, 0.006 + strutDz / 2]}
-                      rotation={[strutRotX, 0, 0]}
-                      castShadow
-                    >
-                      <boxGeometry args={[0.01, 0.01, strutLen]} />
-                      <meshStandardMaterial color="#b8c2ce" metalness={0.5} roughness={0.4} />
-                    </mesh>
-                    <mesh position={[0, -rearDrop * 0.72, 0.0085]} rotation={[Math.PI / 2, 0, 0]}>
-                      <cylinderGeometry args={[0.0032, 0.0032, 0.002, 10]} />
-                      <meshStandardMaterial color="#343c48" metalness={0.6} roughness={0.35} />
-                    </mesh>
-                  </group>
-                ))}
-
-              {/* 依附于左侧/右侧挡板内壁的 L 型托槽导轨 */}
-              {activeSideSigns.map((sideSign) => (
-                <group
-                  key={`side-rail-${sideSign}`}
-                  position={[sideSign * (w / 2 - 0.001), shelfBottomY, shelfMidZ]}
-                >
-                  <mesh position={[-sideSign * 0.0035, -sideDrop / 2, 0]} castShadow receiveShadow>
-                    <boxGeometry args={[0.007, sideDrop, sideRailLen]} />
-                    <meshStandardMaterial color="#cfd6de" metalness={0.48} roughness={0.38} />
-                  </mesh>
-                  <mesh position={[-sideSign * 0.017, -0.0045, 0]} castShadow receiveShadow>
-                    <boxGeometry args={[0.032, 0.009, sideRailLen]} />
-                    <meshStandardMaterial color="#cfd6de" metalness={0.48} roughness={0.38} />
-                  </mesh>
-                  {!partBack &&
-                    [-sideRailLen * 0.28, sideRailLen * 0.28].map((rz, j) => (
-                      <mesh
-                        key={`gusset-${j}`}
-                        position={[-sideSign * 0.014, -sideDrop * 0.48, rz]}
-                        castShadow
-                      >
-                        <boxGeometry args={[0.022, sideDrop * 0.7, 0.012]} />
-                        <meshStandardMaterial color="#b8c2ce" metalness={0.5} roughness={0.4} />
-                      </mesh>
-                    ))}
-                </group>
-              ))}
-
-              {/* 仅兼容旧工程无任何挡板时的兜底立柱 */}
-              {!hasBaffleSupport &&
-                [-1, 1].map((sideSign) => (
-                  <mesh
-                    key={sideSign}
-                    position={[
-                      sideSign * (w / 2 - 0.025),
-                      h + (shelf.height - shelfThickness) / 2,
-                      shelfMidZ,
-                    ]}
-                    castShadow
-                    receiveShadow
-                  >
-                    <boxGeometry args={[0.02, shelf.height - shelfThickness, shelf.depth - 0.02]} />
-                    <meshStandardMaterial color="#d4dae0" metalness={0.3} roughness={0.45} />
-                  </mesh>
-                ))}
             </group>
           );
         })()}

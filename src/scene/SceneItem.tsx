@@ -4,6 +4,7 @@ import { Group, Plane, Raycaster, Vector2, Vector3 } from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import type { AssetMeta, Desk, SceneItem as ItemData } from '../domain/project';
 import { effectiveLidAngle, resolveItemTransform } from '../domain/ports';
+import { constrainItemPoseForConnectedCables } from '../domain/cableRouting';
 import { resolveItemPositionWithCollisions, snapWallOutletPosition } from '../domain/collision';
 import { constrainTargetToMonitorArm, findArmBranchForItem } from '../domain/monitorArm';
 import { deskBackWallBounds, PEGBOARD_WALL_DEFAULT_Y, WALL_MAX_HEIGHT } from '../domain/desk';
@@ -191,18 +192,33 @@ export function SceneItem({
             minWallY,
             Math.min(maxWallY, resolved.wallY ?? snapped.wallY ?? rawWallY),
           );
-          latestX = resolved.x;
-          latestWallY = Math.round(clampedWallY * 1000) / 1000;
+          const curProject = useEditor.getState().project;
+          const tetheredWall =
+            collisionOn && curProject.cables?.length
+              ? constrainItemPoseForConnectedCables(
+                  item,
+                  { ...item, x: resolved.x, wallY: Math.round(clampedWallY * 1000) / 1000 },
+                  curProject,
+                )
+              : null;
+          const tetheredWallHit = tetheredWall?.hitCable;
+          latestX = tetheredWallHit ? tetheredWall!.item.x : resolved.x;
+          latestWallY =
+            tetheredWallHit && typeof tetheredWall!.item.wallY === 'number'
+              ? tetheredWall!.item.wallY
+              : Math.round(clampedWallY * 1000) / 1000;
           group.position.x = latestX;
           group.position.y = isWallOutletWall ? latestWallY - desk.height : latestWallY;
           useEditor
             .getState()
             .setCollisionNotice(
-              resolved.hitObstacle
-                ? `已防穿模避让：${resolved.hitObstacle}`
-                : snapped.snapped
-                  ? '已吸附对齐相邻插座'
-                  : null,
+              tetheredWallHit
+                ? `已达固定线缆长度极限（${(tetheredWall?.maxTotalM ?? tetheredWallHit.lengthM ?? 1).toFixed(2)} m）：线缆不可拉伸`
+                : resolved.hitObstacle
+                  ? `已防穿模避让：${resolved.hitObstacle}`
+                  : snapped.snapped
+                    ? '已吸附对齐相邻插座'
+                    : null,
             );
           useEditor
             .getState()
@@ -223,14 +239,31 @@ export function SceneItem({
             allItems,
             desk,
           );
-          latestX = bounded.x;
-          latestZ = bounded.z;
-          group.position.x = bounded.x;
-          group.position.z = bounded.z;
+          const curProject = useEditor.getState().project;
+          const tetheredArm =
+            collisionOn && curProject.cables?.length
+              ? constrainItemPoseForConnectedCables(
+                  item,
+                  { ...item, x: bounded.x, z: bounded.z },
+                  curProject,
+                )
+              : null;
+          const tetheredArmHit = tetheredArm?.hitCable;
+          latestX = tetheredArmHit ? tetheredArm!.item.x : bounded.x;
+          latestZ = tetheredArmHit ? tetheredArm!.item.z : bounded.z;
+          group.position.x = latestX;
+          group.position.z = latestZ;
+          if (tetheredArmHit) {
+            useEditor
+              .getState()
+              .setCollisionNotice(
+                `已达固定线缆长度极限（${(tetheredArm?.maxTotalM ?? tetheredArmHit.lengthM ?? 1).toFixed(2)} m）：线缆不可拉伸`,
+              );
+          }
           useEditor.getState().setDragPreview({
             id: item.id,
-            x: bounded.x,
-            z: bounded.z,
+            x: latestX,
+            z: latestZ,
             limitReason: bounded.limitReason,
             maxReachCm: bounded.maxReachCm,
           });
@@ -247,20 +280,32 @@ export function SceneItem({
                 allItems,
               )
             : { x: snapped.x, z: snapped.z };
-          latestX = resolved.x;
-          latestZ = resolved.z;
-          group.position.x = resolved.x;
-          group.position.z = resolved.z;
+          const curProject = useEditor.getState().project;
+          const tethered =
+            collisionOn && curProject.cables?.length
+              ? constrainItemPoseForConnectedCables(
+                  item,
+                  { ...item, x: resolved.x, z: resolved.z },
+                  curProject,
+                )
+              : null;
+          const tetheredHit = tethered?.hitCable;
+          latestX = tetheredHit ? tethered!.item.x : resolved.x;
+          latestZ = tetheredHit ? tethered!.item.z : resolved.z;
+          group.position.x = latestX;
+          group.position.z = latestZ;
           useEditor
             .getState()
             .setCollisionNotice(
-              resolved.hitObstacle
-                ? `已防穿模避让：${resolved.hitObstacle}`
-                : snapped.snapped
-                  ? '已吸附对齐相邻插座'
-                  : null,
+              tetheredHit
+                ? `已达固定线缆长度极限（${(tethered?.maxTotalM ?? tetheredHit.lengthM ?? 1).toFixed(2)} m）：线缆不可拉伸`
+                : resolved.hitObstacle
+                  ? `已防穿模避让：${resolved.hitObstacle}`
+                  : snapped.snapped
+                    ? '已吸附对齐相邻插座'
+                    : null,
             );
-          useEditor.getState().setDragPreview({ id: item.id, x: resolved.x, z: resolved.z });
+          useEditor.getState().setDragPreview({ id: item.id, x: latestX, z: latestZ });
         }
         invalidate();
       }
@@ -347,6 +392,7 @@ export function SceneItem({
           color={item.color}
           monitor={item.monitor}
           pitch={item.pitch}
+          screenYaw={item.screenYaw}
           roll={item.roll}
           lift={item.lift}
           hideStand={hasMonitorArm}

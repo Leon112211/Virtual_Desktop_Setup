@@ -49,6 +49,8 @@ export default function App() {
     selectedCableId,
     wiringMode,
     wiringDraft,
+    wiringActiveEnd,
+    wiringShortfallM,
     wiringPreset,
     collisionNotice,
     dragPreview,
@@ -143,8 +145,15 @@ export default function App() {
         } else if ((e.key === 'Delete' || e.key === 'Backspace') && s.selected) {
           e.preventDefault();
           s.remove();
+        } else if ((e.code === 'Space' || e.key === ' ') && s.wiringMode) {
+          e.preventDefault();
+          s.switchWiringEnd();
         } else if (e.key === 'Escape') {
           if (s.dragPreview) return;
+          if (s.wiringMode) {
+            s.setWiringMode(false);
+            return;
+          }
           s.select(null);
           setPanel(null);
         }
@@ -240,7 +249,7 @@ export default function App() {
       useEditor.getState().replace(result.project, result.blobs);
       setSceneVisible(true);
       setWarning('');
-      notify('工程已恢复，欢迎回到你的桌间。');
+      notify('工程已恢复，欢迎回到桌构工作台。');
     } catch (e) {
       notify(`工程未导入，原布局已保留：${errorText(e)}`);
     } finally {
@@ -270,7 +279,7 @@ export default function App() {
           </div>
           <div>
             <strong>
-              桌间<span>Deskspace</span>
+              桌构<span>DeskCraft</span>
             </strong>
             <small>给理想生活，留一张桌子</small>
           </div>
@@ -413,10 +422,25 @@ export default function App() {
           {wiringMode && (
             <div className="arm-limit-pill arm-elbow-pill" role="status">
               <span>
-                {wiringDraft
-                  ? `3D 连线中${wiringPreset?.label ? `（${wiringPreset.label}）` : ''}：点击目标绿色端口或直接落至桌下`
-                  : `3D 连线中${wiringPreset?.label ? `（${wiringPreset.label}）` : ''}：请点击设备上绿色端口作为起点`}
+                {`3D 连线中${wiringPreset?.label ? `（${wiringPreset.label}）${wiringPreset.lengthM ? ` · ${wiringPreset.lengthM}m` : ''}` : ''} · 手持${wiringActiveEnd === 'from' ? ' A 端' : ' B 端'}${
+                  wiringPreset?.fromPortKind &&
+                  wiringPreset?.toPortKind &&
+                  wiringPreset.fromPortKind !== wiringPreset.toPortKind
+                    ? `(${(wiringActiveEnd === 'from' ? wiringPreset.fromPortKind : wiringPreset.toPortKind) === 'dp' ? 'DP接头' : 'Type-C接头'})`
+                    : ''
+                }：${
+                  wiringDraft
+                    ? '点击目标绿色端口完成连接或落至桌下'
+                    : '点击设备绿色端口先接此端（按空格切换另一端）'
+                }${wiringShortfallM > 0.01 ? ` · 线长不足差 ${wiringShortfallM.toFixed(2)}m` : ''}`}
               </span>
+              <button
+                type="button"
+                style={{ pointerEvents: 'auto', marginLeft: 8, padding: '2px 8px', fontSize: 12 }}
+                onClick={() => useEditor.getState().switchWiringEnd()}
+              >
+                切换另一端 (Space)
+              </button>
               {wiringDraft && (
                 <button
                   type="button"

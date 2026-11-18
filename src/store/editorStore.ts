@@ -1,5 +1,9 @@
 import { create } from 'zustand';
 import { cableMeta, resolveCablePlugEnds, type Cable, type CableWaypoint } from '../domain/cable';
+import {
+  constrainItemPoseForConnectedCables,
+  validateCableReachability,
+} from '../domain/cableRouting';
 import type { PlugSpecKind } from '../domain/power';
 import { defaultProject, makeItem } from '../domain/catalog';
 import {
@@ -47,6 +51,8 @@ export type WiringPreset = {
   lengthM: number;
   outletPlugType?: PlugSpecKind;
   devicePlugType?: PlugSpecKind;
+  fromPortKind?: CableKind;
+  toPortKind?: CableKind;
   label?: string;
 };
 
@@ -56,6 +62,10 @@ type State = {
   selectedCableId: string | null;
   selectedWaypointIdx: number | null;
   wiringMode: boolean;
+  wiringFrom: WiringDraft | null;
+  wiringTo: WiringDraft | null;
+  wiringActiveEnd: 'from' | 'to';
+  wiringShortfallM: number;
   wiringDraft: WiringDraft | null;
   wiringPreset: WiringPreset | null;
   collisionEnabled: boolean;
@@ -65,6 +75,9 @@ type State = {
   setCollisionEnabled: (enabled: boolean) => void;
   setCollisionNotice: (note: string | null) => void;
   setWiringMode: (on: boolean, preset?: WiringPreset | null) => void;
+  updateWiringPreset: (preset: WiringPreset) => void;
+  setWiringShortfallM: (shortfallM: number) => void;
+  switchWiringEnd: () => void;
   pickWiringPort: (itemId: string, portId: string, kind: CableKind) => void;
   dropWiringDraftToFloor: (drop?: 'auto' | 'grommet' | 'backEdge') => void;
   selectCable: (id: string | null, waypointIdx?: number | null) => void;
@@ -121,6 +134,10 @@ export const useEditor = create<State>((set, get) => ({
   selectedCableId: null,
   selectedWaypointIdx: null,
   wiringMode: false,
+  wiringFrom: null,
+  wiringTo: null,
+  wiringActiveEnd: 'from',
+  wiringShortfallM: 0,
   wiringDraft: null,
   wiringPreset: null,
   collisionEnabled: true,
@@ -132,8 +149,44 @@ export const useEditor = create<State>((set, get) => ({
   setWiringMode: (on, preset = null) =>
     set({
       wiringMode: on,
+      wiringFrom: null,
+      wiringTo: null,
+      wiringActiveEnd: 'from',
+      wiringShortfallM: 0,
       wiringDraft: null,
       wiringPreset: on ? preset : null,
+    }),
+  updateWiringPreset: (preset) => set((s) => (s.wiringMode ? { wiringPreset: preset } : {})),
+  setWiringShortfallM: (shortfallM) =>
+    set((s) =>
+      Math.abs(s.wiringShortfallM - shortfallM) > 0.005 ? { wiringShortfallM: shortfallM } : {},
+    ),
+  switchWiringEnd: () =>
+    set((s) => {
+      if (!s.wiringMode) return {};
+      const nextActive: 'from' | 'to' = s.wiringActiveEnd === 'from' ? 'to' : 'from';
+      if (!s.wiringFrom && !s.wiringTo) {
+        return { wiringActiveEnd: nextActive };
+      }
+      const asymmetricEnds =
+        s.wiringPreset?.fromPortKind &&
+        s.wiringPreset?.toPortKind &&
+        s.wiringPreset.fromPortKind !== s.wiringPreset.toPortKind;
+      if (asymmetricEnds) {
+        return {
+          wiringFrom: null,
+          wiringTo: null,
+          wiringDraft: null,
+          wiringActiveEnd: nextActive,
+        };
+      }
+      // Keep the already-plugged port fixed and swap which physical end is held on the cursor
+      return {
+        wiringFrom: s.wiringTo,
+        wiringTo: s.wiringFrom,
+        wiringActiveEnd: nextActive,
+        wiringDraft: s.wiringTo ?? s.wiringFrom,
+      };
     }),
   selectCable: (id, waypointIdx = null) => {
     if (get().selectedCableId !== id) get().endGesture();
@@ -141,55 +194,96 @@ export const useEditor = create<State>((set, get) => ({
   },
   pickWiringPort: (itemId, portId, kind) => {
     const s = get();
-    const draft = s.wiringDraft;
     const preset = s.wiringPreset;
-    if (!draft) {
-      set({ wiringDraft: { itemId, portId, kind } });
+    const picked: WiringDraft = { itemId, portId, kind };
+    const connected = s.wiringFrom ?? s.wiringTo;
+
+    if (!connected) {
+      const placeAtFrom = s.wiringActiveEnd === 'from';
+      set({
+        wiringFrom: placeAtFrom ? picked : null,
+        wiringTo: placeAtFrom ? null : picked,
+        wiringDraft: picked,
+        wiringActiveEnd: placeAtFrom ? 'to' : 'from',
+      });
       return;
     }
-    if (draft.itemId === itemId && draft.portId === portId) {
-      set({ wiringDraft: null });
+
+    const connectedRole: 'from' | 'to' = s.wiringFrom ? 'from' : 'to';
+    if (connected.itemId === itemId && connected.portId === portId) {
+      set({
+        wiringFrom: null,
+        wiringTo: null,
+        wiringDraft: null,
+        wiringActiveEnd: connectedRole,
+      });
       return;
     }
-    if (draft.itemId === itemId) {
-      set({ wiringDraft: { itemId, portId, kind } });
+    if (connected.itemId === itemId) {
+      set({
+        wiringFrom: connectedRole === 'from' ? picked : null,
+        wiringTo: connectedRole === 'to' ? picked : null,
+        wiringDraft: picked,
+      });
       return;
     }
+
+    const fromEp = s.wiringFrom ?? picked;
+    const toEp = s.wiringTo ?? picked;
     const resolvedKind: CableKind = preset
       ? preset.kind
-      : draft.kind === kind
-        ? draft.kind
-        : (draft.kind === 'rca' && kind === 'aux35') || (draft.kind === 'aux35' && kind === 'rca')
-          ? 'rca'
-          : draft.kind === 'usbc' || kind === 'usbc'
-            ? 'usbc'
-            : draft.kind === 'magsafe' || kind === 'magsafe'
-              ? 'magsafe'
-              : draft.kind;
+      : fromEp.kind === toEp.kind
+        ? fromEp.kind
+        : (fromEp.kind === 'dp' && toEp.kind === 'usbc') ||
+            (fromEp.kind === 'usbc' && toEp.kind === 'dp')
+          ? 'dp'
+          : (fromEp.kind === 'rca' && toEp.kind === 'aux35') ||
+              (fromEp.kind === 'aux35' && toEp.kind === 'rca')
+            ? 'rca'
+            : fromEp.kind === 'usbc' || toEp.kind === 'usbc'
+              ? 'usbc'
+              : fromEp.kind === 'magsafe' || toEp.kind === 'magsafe'
+                ? 'magsafe'
+                : fromEp.kind;
     const spec = cableMeta[resolvedKind];
-    const fromItem = s.project.items.find((i) => i.id === draft.itemId);
-    const targetItem = s.project.items.find((i) => i.id === itemId);
+    const fromItem = s.project.items.find((i) => i.id === fromEp.itemId);
+    const targetItem = s.project.items.find((i) => i.id === toEp.itemId);
     const plugEnds = resolveCablePlugEnds({
       fromKind: fromItem?.kind,
-      fromPortId: draft.portId,
+      fromPortId: fromEp.portId,
+      fromPortKind: fromEp.kind,
       toKind: targetItem?.kind,
-      toPortId: portId,
+      toPortId: toEp.portId,
+      toPortKind: toEp.kind,
       cableKind: resolvedKind,
       outletPlugType: preset?.outletPlugType,
       devicePlugType: preset?.devicePlugType,
     });
-    const cableId = s.addCable({
-      kind: resolvedKind,
-      from: { type: 'device', itemId: draft.itemId, portId: draft.portId },
-      to: { type: 'device', itemId, portId },
-      routeViaArm: true,
-      viaStandSlot: true,
-      color: preset?.color ?? spec.color,
-      lengthM: preset?.lengthM ?? spec.defaultLengthM,
-      lengthIncludesConnectors: true,
-      ...plugEnds,
-    });
+    let cableId: string;
+    try {
+      cableId = s.addCable({
+        kind: resolvedKind,
+        from: { type: 'device', itemId: fromEp.itemId, portId: fromEp.portId },
+        to: { type: 'device', itemId: toEp.itemId, portId: toEp.portId },
+        routeViaArm: true,
+        viaStandSlot: true,
+        color: preset?.color ?? spec.color,
+        lengthM: preset?.lengthM ?? spec.defaultLengthM,
+        lengthIncludesConnectors: true,
+        ...plugEnds,
+      });
+    } catch (err) {
+      set({
+        collisionNotice:
+          err instanceof Error ? err.message : '线缆固定长度不足，无法完成端口连接。',
+      });
+      return;
+    }
     set({
+      wiringFrom: null,
+      wiringTo: null,
+      wiringActiveEnd: 'from',
+      wiringShortfallM: 0,
       wiringDraft: null,
       wiringMode: false,
       wiringPreset: null,
@@ -199,25 +293,46 @@ export const useEditor = create<State>((set, get) => ({
   },
   dropWiringDraftToFloor: (drop = 'auto') => {
     const s = get();
-    const draft = s.wiringDraft;
+    const draft = s.wiringFrom ?? s.wiringTo ?? s.wiringDraft;
     if (!draft) return;
     const preset = s.wiringPreset;
     const resolvedKind = preset ? preset.kind : draft.kind;
     const spec = cableMeta[resolvedKind];
-    const cableId = s.addCable({
-      kind: resolvedKind,
-      from: { type: 'device', itemId: draft.itemId, portId: draft.portId },
-      to: { type: 'floor', drop },
-      drop,
-      routeViaArm: true,
-      viaStandSlot: true,
-      color: preset?.color ?? spec.color,
-      lengthM: preset?.lengthM ?? spec.defaultLengthM,
-      lengthIncludesConnectors: true,
-      ...(preset?.devicePlugType ? { fromPlugType: preset.devicePlugType } : {}),
-      ...(preset?.outletPlugType ? { toPlugType: preset.outletPlugType } : {}),
+    const fromItem = s.project.items.find((i) => i.id === draft.itemId);
+    const plugEnds = resolveCablePlugEnds({
+      fromKind: fromItem?.kind,
+      fromPortId: draft.portId,
+      fromPortKind: draft.kind,
+      cableKind: resolvedKind,
+      outletPlugType: preset?.outletPlugType,
+      devicePlugType: preset?.devicePlugType,
     });
+    let cableId: string;
+    try {
+      cableId = s.addCable({
+        kind: resolvedKind,
+        from: { type: 'device', itemId: draft.itemId, portId: draft.portId },
+        to: { type: 'floor', drop },
+        drop,
+        routeViaArm: true,
+        viaStandSlot: true,
+        color: preset?.color ?? spec.color,
+        lengthM: preset?.lengthM ?? spec.defaultLengthM,
+        lengthIncludesConnectors: true,
+        ...plugEnds,
+      });
+    } catch (err) {
+      set({
+        collisionNotice:
+          err instanceof Error ? err.message : '线缆固定长度不足，无法垂落到桌面下方。',
+      });
+      return;
+    }
     set({
+      wiringFrom: null,
+      wiringTo: null,
+      wiringActiveEnd: 'from',
+      wiringShortfallM: 0,
       wiringDraft: null,
       wiringMode: false,
       wiringPreset: null,
@@ -226,38 +341,58 @@ export const useEditor = create<State>((set, get) => ({
     });
   },
   updateCableWaypoint: (cableId, idx, point, fallback) => {
+    const state = get();
+    const existing = state.project.cables?.find((item) => item.id === cableId);
+    if (!existing) return;
+    const list = (existing.waypoints?.length ? existing.waypoints : fallback).map((w) => ({
+      ...w,
+    }));
+    if (idx < 0 || idx >= list.length) return;
+    list[idx] = {
+      x: Math.max(-5, Math.min(5, Math.round(point.x * 1000) / 1000)),
+      y: Math.max(0.004, Math.min(3, Math.round(point.y * 1000) / 1000)),
+      z: Math.max(-5, Math.min(5, Math.round(point.z * 1000) / 1000)),
+    };
+    const check = validateCableReachability({ ...existing, waypoints: list }, state.project);
+    if (!check.ok) {
+      set({
+        collisionNotice: `已达固定线长极限（固定 ${check.totalM?.toFixed(2) ?? ''} m，当前拖拽路径需 ${check.requiredM?.toFixed(2) ?? ''} m），线缆无法被拉长`,
+      });
+      return;
+    }
     get().commit((p) => {
       if (!p.cables) return;
       const c = p.cables.find((item) => item.id === cableId);
-      if (!c) return;
-      const list = (c.waypoints?.length ? c.waypoints : fallback).map((w) => ({ ...w }));
-      if (idx < 0 || idx >= list.length) return;
-      list[idx] = {
-        x: Math.max(-5, Math.min(5, Math.round(point.x * 1000) / 1000)),
-        y: Math.max(0.004, Math.min(3, Math.round(point.y * 1000) / 1000)),
-        z: Math.max(-5, Math.min(5, Math.round(point.z * 1000) / 1000)),
-      };
-      c.waypoints = list;
+      if (c) c.waypoints = list;
     });
   },
   insertCableWaypoint: (cableId, afterIdx, point, fallback) => {
+    const state = get();
+    const existing = state.project.cables?.find((item) => item.id === cableId);
+    if (!existing) return;
+    const list = (existing.waypoints?.length ? existing.waypoints : fallback).map((w) => ({
+      ...w,
+    }));
+    const pos = Math.max(0, Math.min(list.length, afterIdx + 1));
+    list.splice(pos, 0, {
+      x: Math.max(-5, Math.min(5, Math.round(point.x * 1000) / 1000)),
+      y: Math.max(0.004, Math.min(3, Math.round(point.y * 1000) / 1000)),
+      z: Math.max(-5, Math.min(5, Math.round(point.z * 1000) / 1000)),
+    });
+    const check = validateCableReachability({ ...existing, waypoints: list }, state.project);
+    if (!check.ok) {
+      set({
+        collisionNotice: check.reason ?? '已达固定线长上限，无法继续拉长线缆。',
+      });
+      return;
+    }
     get().endGesture();
-    let insertedIdx = 0;
     get().commit((p) => {
       if (!p.cables) return;
       const c = p.cables.find((item) => item.id === cableId);
-      if (!c) return;
-      const list = (c.waypoints?.length ? c.waypoints : fallback).map((w) => ({ ...w }));
-      const pos = Math.max(0, Math.min(list.length, afterIdx + 1));
-      list.splice(pos, 0, {
-        x: Math.max(-5, Math.min(5, Math.round(point.x * 1000) / 1000)),
-        y: Math.max(0.004, Math.min(3, Math.round(point.y * 1000) / 1000)),
-        z: Math.max(-5, Math.min(5, Math.round(point.z * 1000) / 1000)),
-      });
-      c.waypoints = list;
-      insertedIdx = pos;
+      if (c) c.waypoints = list;
     });
-    set({ selectedCableId: cableId, selectedWaypointIdx: insertedIdx });
+    set({ selectedCableId: cableId, selectedWaypointIdx: pos });
   },
   removeCableWaypoint: (cableId, idx, fallback) => {
     get().endGesture();
@@ -621,6 +756,7 @@ export const useEditor = create<State>((set, get) => ({
         throw new EditorError('这台笔记本已经安装在其他支架或托盘上。');
     }
     let hitMonitorObstacle: string | undefined;
+    let cableTetherNotice: string | undefined;
     get().commit((p) => {
       const i = p.items.findIndex((i) => i.id === id);
       if (i >= 0) {
@@ -680,12 +816,14 @@ export const useEditor = create<State>((set, get) => ({
           prevItem.kind === 'monitor' &&
           get().collisionEnabled &&
           (patch.rotation !== undefined ||
+            patch.screenYaw !== undefined ||
             patch.pitch !== undefined ||
             patch.roll !== undefined ||
             patch.lift !== undefined)
         ) {
           const posePatch: Partial<SceneItem> = {};
           if (patch.rotation !== undefined) posePatch.rotation = p.items[i].rotation;
+          if (patch.screenYaw !== undefined) posePatch.screenYaw = p.items[i].screenYaw;
           if (patch.pitch !== undefined) posePatch.pitch = p.items[i].pitch;
           if (patch.roll !== undefined) posePatch.roll = p.items[i].roll;
           if (patch.lift !== undefined) posePatch.lift = p.items[i].lift;
@@ -693,6 +831,7 @@ export const useEditor = create<State>((set, get) => ({
             {
               ...p.items[i],
               rotation: prevItem.rotation,
+              screenYaw: prevItem.screenYaw,
               pitch: prevItem.pitch,
               roll: prevItem.roll,
               lift: prevItem.lift,
@@ -779,20 +918,53 @@ export const useEditor = create<State>((set, get) => ({
           if (remaining.length) p.cables = remaining;
           else delete p.cables;
         }
+
+        const poseOrPosChanged =
+          patch.x !== undefined ||
+          patch.z !== undefined ||
+          patch.wallY !== undefined ||
+          patch.lift !== undefined ||
+          patch.rotation !== undefined ||
+          patch.screenYaw !== undefined ||
+          patch.pitch !== undefined ||
+          patch.roll !== undefined ||
+          patch.monitorArm !== undefined ||
+          patch.laptopStand !== undefined ||
+          patch.surface !== undefined;
+        if (poseOrPosChanged && p.cables?.length && get().collisionEnabled) {
+          const prevProject: Project = {
+            ...p,
+            items: p.items.map((it, idx) => (idx === i ? prevItem : it)),
+          };
+          const tethered = constrainItemPoseForConnectedCables(prevItem, p.items[i], prevProject);
+          if (tethered.hitCable) {
+            p.items[i] = tethered.item;
+            const fixedLen = tethered.maxTotalM ?? tethered.hitCable.lengthM ?? 1;
+            cableTetherNotice = `已达固定线缆长度极限（${fixedLen.toFixed(2)} m）：线缆不可拉伸，已限制继续拉远`;
+          }
+        }
       }
     });
-    if (hitMonitorObstacle) {
+    if (cableTetherNotice) {
+      set({ collisionNotice: cableTetherNotice });
+    } else if (hitMonitorObstacle) {
       set({ collisionNotice: `已限制显示器姿态：避免与「${hitMonitorObstacle}」穿模` });
     } else if (
       patch.rotation !== undefined ||
       patch.pitch !== undefined ||
       patch.roll !== undefined ||
-      patch.lift !== undefined
+      patch.lift !== undefined ||
+      patch.x !== undefined ||
+      patch.z !== undefined
     ) {
       if (get().collisionNotice) set({ collisionNotice: null });
     }
   },
   addCable: (cable) => {
+    const check = validateCableReachability(cable, get().project);
+    if (!check.ok) {
+      throw new EditorError(check.reason ?? '线缆固定长度不足，无法完成连接。');
+    }
     get().endGesture();
     const id = uid();
     get().commit((p) => {
@@ -801,10 +973,17 @@ export const useEditor = create<State>((set, get) => ({
     return id;
   },
   updateCable: (id, patch) => {
+    const current = get().project.cables?.find((c) => c.id === id);
+    if (!current) return;
+    const candidate = { ...current, ...patch };
+    const check = validateCableReachability(candidate, get().project);
+    if (!check.ok) {
+      throw new EditorError(check.reason ?? '所选固定线缆长度不足以覆盖当前走线路径。');
+    }
     get().commit((p) => {
       if (!p.cables) return;
       const idx = p.cables.findIndex((c) => c.id === id);
-      if (idx >= 0) p.cables[idx] = { ...p.cables[idx], ...patch };
+      if (idx >= 0) p.cables[idx] = candidate;
     });
   },
   removeCable: (id) => {
@@ -977,6 +1156,10 @@ export const useEditor = create<State>((set, get) => ({
       selectedCableId: null,
       selectedWaypointIdx: null,
       wiringMode: false,
+      wiringFrom: null,
+      wiringTo: null,
+      wiringActiveEnd: 'from',
+      wiringShortfallM: 0,
       wiringDraft: null,
       wiringPreset: null,
       collisionNotice: null,

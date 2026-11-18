@@ -11,6 +11,7 @@ export const MIN_STAND = 0.02; // stand cannot collapse below 2 cm
 // Screen pose limits, in the units the inspector edits them (degrees / metres).
 export const MAX_PITCH = 45; // screen tilt up/down (±45°)
 export const MAX_ROLL = 90; // screen pivot to portrait (±90°)
+export const MAX_SCREEN_YAW = 30; // stock-stand screen swivel left/right (±30° without rotating stand base)
 export const MIN_LIFT = -0.05; // Dell UltraSharp stock stand downward travel (-50 mm below nominal)
 export const MAX_LIFT = 0.05; // Dell UltraSharp stock stand upward travel (+50 mm above nominal)
 export const ARM_MIN_LIFT = -0.32; // downward vertical travel when both arm segments articulate low
@@ -124,6 +125,7 @@ export function screenInches(size: Size, model?: MonitorMold): number {
 // trust the values even when reading an untrusted project file.
 export interface MonitorPose {
   pitchDeg: number; // tilt about the horizontal left–right axis
+  screenYawDeg: number; // screen-only horizontal swivel about stand VESA joint (±30°)
   rollDeg: number; // pivot about the front–back axis (portrait)
   lift: number; // vertical screen travel from nominal rest, in metres
   pivotY: number; // screen pivot height above the desk, in metres
@@ -134,6 +136,7 @@ export function monitorPose(
   size: Size,
   pose?: {
     pitch?: number;
+    screenYaw?: number;
     roll?: number;
     lift?: number;
     monitor?: MonitorSettings;
@@ -155,6 +158,9 @@ export function monitorPose(
   const minPitch = isStudio ? -5 : -MAX_PITCH;
   const maxPitch = isStudio ? 25 : MAX_PITCH;
   const pitchDeg = clamp(pose?.pitch ?? 0, minPitch, maxPitch);
+  const screenYawDeg = pose?.hasMonitorArm
+    ? 0
+    : clamp(pose?.screenYaw ?? 0, -MAX_SCREEN_YAW, MAX_SCREEN_YAW);
   const rollDeg = clamp(pose?.roll ?? 0, -MAX_ROLL, MAX_ROLL);
 
   let pivotZOffset = 0;
@@ -175,6 +181,7 @@ export function monitorPose(
 
   return {
     pitchDeg,
+    screenYawDeg,
     rollDeg,
     lift,
     pivotY: standHeight + lift,

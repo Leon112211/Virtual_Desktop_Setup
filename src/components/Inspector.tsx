@@ -54,6 +54,7 @@ import {
   MAX_LIFT,
   MAX_PITCH,
   MAX_ROLL,
+  MAX_SCREEN_YAW,
   MIN_LIFT,
   monitorBaseTier,
   monitorParts,
@@ -431,6 +432,17 @@ export default function Inspector({ onError }: { onError: (m: string) => void })
                 unit="°"
                 onChange={(v) => safe(() => updateItem(item.id, { pitch: v }))}
               />
+              {!hasMonitorArm && (
+                <NumberField
+                  label="屏幕左右旋转"
+                  value={pose.screenYawDeg}
+                  min={-MAX_SCREEN_YAW}
+                  max={MAX_SCREEN_YAW}
+                  step={5}
+                  unit="°"
+                  onChange={(v) => safe(() => updateItem(item.id, { screenYaw: v }))}
+                />
+              )}
               <NumberField
                 label="屏幕翻转"
                 value={pose.rollDeg}
@@ -458,8 +470,8 @@ export default function Inspector({ onError }: { onError: (m: string) => void })
               {hasMonitorArm
                 ? '已挂载显示器支架臂，屏幕高度由下长臂与气压上臂联动提供（支持 -32 ~ +36 cm，受防穿模限位约束）。'
                 : isStudioDisplay
-                  ? '固定 L 型底座滑轨行程最大 10.5 cm，调节高度时屏幕沿斜臂平行滑动。'
-                  : '固定倾斜立柱滑轨（行程 -5 ~ +5 cm），调节高度时屏幕平行立柱斜向滑动。'}
+                  ? '固定 L 型底座滑轨行程最大 10.5 cm，调节高度时屏幕沿斜臂平行滑动；纯屏幕可左右各 30° 旋转（底座固定），所有姿态均受防穿模物理限位约束。'
+                  : '固定倾斜立柱滑轨（行程 -5 ~ +5 cm），底座可整体旋转，纯屏幕也可单独左右各 30° 旋转（底座固定），所有姿态均受防穿模物理限位约束。'}
             </p>
           </section>
         )}
@@ -517,7 +529,7 @@ export default function Inspector({ onError }: { onError: (m: string) => void })
                   旋转角度
                 </h4>
                 <NumberField
-                  label="绕竖轴旋转"
+                  label={isMonitor && !hasMonitorArm ? '底座整体旋转' : '绕竖轴旋转'}
                   value={Math.round(item.rotation * 10) / 10}
                   min={-360}
                   max={360}

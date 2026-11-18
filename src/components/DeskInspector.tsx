@@ -297,6 +297,7 @@ export default function DeskInspector({
           left: p.desk.partitions?.left ?? false,
           right: p.desk.partitions?.right ?? false,
           height: p.desk.partitions?.height ?? PARTITION_DEFAULT_HEIGHT,
+          ...(p.desk.partitions?.material ? { material: p.desk.partitions.material } : {}),
           [key]: value,
         };
         if (!next.back && !next.left && !next.right) {
@@ -334,6 +335,7 @@ export default function DeskInspector({
                 PARTITION_MAX_HEIGHT,
                 Math.max(cur?.height ?? PARTITION_DEFAULT_HEIGHT, nextHeight + 0.04),
               ),
+              ...(cur?.material ? { material: cur.material } : {}),
             };
           } else if (cur && cur.height < nextHeight + 0.03) {
             cur.height = Math.min(PARTITION_MAX_HEIGHT, Math.max(cur.height, nextHeight + 0.04));
@@ -635,8 +637,40 @@ export default function DeskInspector({
                     )
                   }
                 />
+                <div style={{ marginTop: 10 }}>
+                  <span className="field-label-small">挡板材质（侧板 / 后板）</span>
+                  <div className="desk-shape-presets" role="group" aria-label="挡板材质">
+                    {(
+                      [
+                        { value: 'matchDesk', label: '同桌面材质' },
+                        { value: 'frosted', label: '透明磨砂' },
+                      ] as const
+                    ).map((opt) => {
+                      const active = (partitions.material ?? 'matchDesk') === opt.value;
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          className={active ? 'active' : ''}
+                          aria-pressed={active}
+                          onClick={() =>
+                            onSafe(() =>
+                              commit((p) => {
+                                if (p.desk.partitions) p.desk.partitions.material = opt.value;
+                              }),
+                            )
+                          }
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
                 <p className="field-note">
-                  与桌体倒角及包边密封裙边一体成型，拐角连续圆角包覆，底部配桌底固定卡扣。
+                  {partitions.material === 'frosted'
+                    ? '半透明哑光磨砂板材，保留通透采光同时兼顾桌底包边密封与底部固定卡扣。'
+                    : '材质与桌面一致，与桌体倒角及包边密封裙边一体成型，拐角连续圆角包覆。'}
                 </p>
               </div>
             )}
@@ -694,11 +728,11 @@ export default function DeskInspector({
                 <p className="field-note">
                   {partitions?.back
                     ? partitions.left || partitions.right
-                      ? `与主桌等宽（${cm(desk.width)} cm），通过壁挂三角悬臂与侧壁导轨依附于后侧及侧边挡板（桌底悬空无立柱）。`
-                      : `与主桌等宽（${cm(desk.width)} cm），通过壁挂三角悬臂依附于后挡板（桌底悬空无立柱）。`
+                      ? `与主桌等宽（${cm(desk.width)} cm），材质与桌面一致并直接嵌合于后板及侧板内侧（桌底悬空无立柱）。`
+                      : `与主桌等宽（${cm(desk.width)} cm），材质与桌面一致并一体嵌合于后板内侧（桌底悬空无立柱）。`
                     : partitions?.left && partitions?.right
-                      ? `与主桌等宽（${cm(desk.width)} cm），通过两侧挡板内壁 L 型导轨承托固定（桌底悬空无立柱）。`
-                      : `与主桌等宽（${cm(desk.width)} cm），依附于侧边挡板内壁导轨；建议开启后挡板或双侧挡板提供更稳固支撑。`}
+                      ? `与主桌等宽（${cm(desk.width)} cm），材质与桌面一致并一体嵌合于两侧侧板内侧（桌底悬空无立柱）。`
+                      : `与主桌等宽（${cm(desk.width)} cm），材质与桌面一致；建议开启后挡板或双侧挡板提供更稳固连接。`}
                 </p>
               </>
             )}

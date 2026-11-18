@@ -14,17 +14,18 @@ import {
 } from 'three';
 import { DEFAULT_LID_ANGLE, MAX_LID_ANGLE } from '../domain/laptop';
 import { constrainMonitorPose } from '../domain/collision';
-import { MAX_PITCH, MAX_ROLL, monitorParts, monitorPose } from '../domain/monitor';
+import { MAX_PITCH, MAX_ROLL, MAX_SCREEN_YAW, monitorParts, monitorPose } from '../domain/monitor';
 import { normalizeRotationDeg } from '../domain/monitorArm';
 import type { SceneItem } from '../domain/project';
 import { useEditor } from '../store/editorStore';
 
-type AxisKind = 'yaw' | 'pitch' | 'roll' | 'lid';
+type AxisKind = 'yaw' | 'screenYaw' | 'pitch' | 'roll' | 'lid';
 
 const Y_AXIS = new Vector3(0, 1, 0);
 const TICK_ANGLES = [0, 45, 90, 135, 180, -135, -90, -45];
 const AXIS_COLORS: Record<AxisKind, { idle: string; light: string; dark: string }> = {
   yaw: { idle: '#2563eb', light: '#3b82f6', dark: '#1d4ed8' },
+  screenYaw: { idle: '#4f46e5', light: '#6366f1', dark: '#4338ca' },
   pitch: { idle: '#059669', light: '#10b981', dark: '#047857' },
   roll: { idle: '#d97706', light: '#f59e0b', dark: '#b45309' },
   lid: { idle: '#0891b2', light: '#06b6d4', dark: '#0e7490' },
@@ -140,6 +141,16 @@ function makeAxisHandleTexture(kind: AxisKind, active: boolean): CanvasTexture {
     ctx.beginPath();
     ctx.arc(cx, cy, 5.5, 0, Math.PI * 2);
     ctx.fill();
+  } else if (kind === 'screenYaw') {
+    // Horizontal pan arc representing ±30° screen-only swivel around fixed stand VESA pivot
+    ctx.beginPath();
+    ctx.moveTo(cx - 32, cy - 10);
+    ctx.lineTo(cx + 32, cy - 10);
+    ctx.stroke();
+    drawRotationArc(ctx, cx, cy - 6, 40, Math.PI * 0.16, Math.PI * 0.84);
+    ctx.beginPath();
+    ctx.arc(cx, cy - 10, 7.5, 0, Math.PI * 2);
+    ctx.fill();
   } else if (kind === 'pitch') {
     // Vertical tilt arc + pivot dot representing forward/backward screen pitch
     drawRotationArc(ctx, cx - 10, cy, 46, -Math.PI * 0.38, Math.PI * 0.38, false);
@@ -222,6 +233,14 @@ export function ItemRotateGizmo({
     () => makeAxisHandleTexture('yaw', hoveredPart === 'yaw' || draggingAxis === 'yaw'),
     [hoveredPart, draggingAxis],
   );
+  const screenYawTex = useMemo(
+    () =>
+      makeAxisHandleTexture(
+        'screenYaw',
+        hoveredPart === 'screenYaw' || draggingAxis === 'screenYaw',
+      ),
+    [hoveredPart, draggingAxis],
+  );
   const pitchTex = useMemo(
     () => makeAxisHandleTexture('pitch', hoveredPart === 'pitch' || draggingAxis === 'pitch'),
     [hoveredPart, draggingAxis],
@@ -238,11 +257,12 @@ export function ItemRotateGizmo({
   useEffect(() => {
     return () => {
       yawTex.dispose();
+      screenYawTex.dispose();
       pitchTex.dispose();
       rollTex.dispose();
       lidTex.dispose();
     };
-  }, [yawTex, pitchTex, rollTex, lidTex]);
+  }, [yawTex, screenYawTex, pitchTex, rollTex, lidTex]);
 
   useEffect(() => {
     return () => {
@@ -425,7 +445,7 @@ export function ItemRotateGizmo({
   const ringRadius = Math.max(0.08, Math.hypot(item.size.width / 2, item.size.depth / 2) + 0.016);
   const frontZ = item.size.depth / 2 + 0.028;
 
-  // Monitor pitch & roll articulation parameters
+  // Monitor pitch, screen-only yaw & roll articulation parameters
   const isMonitor = item.kind === 'monitor';
   const isStudioDisplay = isMonitor && item.monitor?.model === 'studioDisplay';
   const monitorGeo = isMonitor ? monitorParts(item.size, item.monitor?.model) : null;
@@ -435,17 +455,79 @@ export function ItemRotateGizmo({
   const panelY = mPose && monitorGeo ? mPose.pivotY + monitorGeo.panelHeight / 2 : 0;
   const panelZ = -0.02 + (mPose?.pivotZOffset ?? 0);
   const pitchRad = mPose ? (mPose.pitchDeg * Math.PI) / 180 : 0;
+  const screenYawRad = mPose ? (mPose.screenYawDeg * Math.PI) / 180 : 0;
   const rollRad = mPose ? (mPose.rollDeg * Math.PI) / 180 : 0;
   const pitchArcR = monitorGeo ? Math.min(0.115, monitorGeo.panelHeight * 0.3) : 0.1;
   const pitchFlankX = item.size.width / 2 + 0.026;
   const rollArcR = monitorGeo ? monitorGeo.panelHeight / 2 + 0.024 : 0.18;
+  const screenYawY = mPose ? Math.max(0.06, mPose.pivotY - 0.028) : 0.08;
+  const screenYawArcR = Math.max(0.11, Math.min(0.17, item.size.depth * 0.72));
+
+  function startMonitorScreenYaw(e: ThreeEvent<PointerEvent>) {
+    if (!mPose || !monitorGeo || hasMonitorArm) return;
+    const itemPos = new Vector3(...worldPosition);
+    const invQuat = worldQuaternion.clone().invert();
+    const axisY = new Vector3(0, 1, 0).applyQuaternion(worldQuaternion).normalize();
+    const pivotWorld = new Vector3(0, screenYawY, panelZ)
+      .applyQuaternion(worldQuaternion)
+      .add(itemPos);
+    const startScreenYaw = mPose.screenYawDeg;
+    let currentScreenYaw = startScreenYaw;
+    let lastHitObstacle: string | undefined;
+
+    startAxisDrag(e, 'screenYaw', {
+      plane: new Plane().setFromNormalAndCoplanarPoint(axisY, pivotWorld),
+      startValue: startScreenYaw,
+      getAngleFromHit: (hit) => {
+        const local = hit.clone().sub(pivotWorld).applyQuaternion(invQuat);
+        return Math.atan2(local.x, local.z);
+      },
+      resolveValue: (deltaDeg, ev) => {
+        let candidate = startScreenYaw + deltaDeg;
+        if (ev.shiftKey) candidate = Math.round(candidate / 5) * 5;
+        const clamped = roundTenth(clamp(candidate, -MAX_SCREEN_YAW, MAX_SCREEN_YAW));
+        if (useEditor.getState().collisionEnabled) {
+          const { project } = useEditor.getState();
+          const res = constrainMonitorPose(
+            { ...item, screenYaw: currentScreenYaw },
+            { screenYaw: clamped },
+            project.desk,
+            project.items,
+          );
+          currentScreenYaw = roundTenth(res.item.screenYaw ?? clamped);
+          lastHitObstacle = res.hitObstacle;
+          return currentScreenYaw;
+        }
+        lastHitObstacle = undefined;
+        return clamped;
+      },
+      screenFallbackDegPerPx: 0.35,
+      onPreview: (value) =>
+        useEditor.getState().setDragPreview({
+          kind: 'pose',
+          id: item.id,
+          axis: 'screenYaw',
+          value,
+          hitObstacle: lastHitObstacle,
+        }),
+      onCommit: (screenYaw) => commitPatch({ screenYaw }, '无法左右旋转屏幕'),
+      onClick: () => {
+        const next =
+          startScreenYaw + 15 > MAX_SCREEN_YAW ? -MAX_SCREEN_YAW : roundTenth(startScreenYaw + 15);
+        commitPatch({ screenYaw: next }, '无法左右旋转屏幕');
+      },
+    });
+  }
 
   function startMonitorPitch(e: ThreeEvent<PointerEvent>) {
     if (!mPose || !monitorGeo) return;
     const itemPos = new Vector3(...worldPosition);
-    const invQuat = worldQuaternion.clone().invert();
-    const axisX = new Vector3(1, 0, 0).applyQuaternion(worldQuaternion).normalize();
-    const pivotWorld = new Vector3(pitchFlankX, panelY, panelZ)
+    const screenYawQuat = new Quaternion().setFromEuler(new Euler(0, screenYawRad, 0, 'YXZ'));
+    const pitchFrameQuat = worldQuaternion.clone().multiply(screenYawQuat);
+    const invQuat = pitchFrameQuat.clone().invert();
+    const axisX = new Vector3(1, 0, 0).applyQuaternion(pitchFrameQuat).normalize();
+    const flankOffset = new Vector3(pitchFlankX, 0, 0).applyQuaternion(screenYawQuat);
+    const pivotWorld = new Vector3(flankOffset.x, panelY, panelZ + flankOffset.z)
       .applyQuaternion(worldQuaternion)
       .add(itemPos);
     const startPitch = mPose.pitchDeg;
@@ -498,7 +580,7 @@ export function ItemRotateGizmo({
   function startMonitorRoll(e: ThreeEvent<PointerEvent>) {
     if (!mPose || !monitorGeo) return;
     const itemPos = new Vector3(...worldPosition);
-    const pitchQuat = new Quaternion().setFromEuler(new Euler(pitchRad, 0, 0, 'XYZ'));
+    const pitchQuat = new Quaternion().setFromEuler(new Euler(pitchRad, screenYawRad, 0, 'YXZ'));
     const screenWorldQuat = worldQuaternion.clone().multiply(pitchQuat);
     const invScreenQuat = screenWorldQuat.clone().invert();
     const screenNormal = new Vector3(0, 0, 1).applyQuaternion(screenWorldQuat).normalize();
@@ -660,86 +742,93 @@ export function ItemRotateGizmo({
         </group>
       )}
 
-      {/* 2. Monitor Pitch & Roll articulated handles attached directly onto the display */}
+      {/* 2. Monitor Pitch, Screen-only Yaw (±30° on stock stand) & Roll articulated handles */}
       {isMonitor && monitorGeo && mPose && (
         <group>
-          {/* Side Pitch arc & handle in YZ hinge plane */}
-          <mesh
-            name="item-pitch-arc"
-            position={[pitchFlankX, panelY, panelZ]}
-            rotation={[0, Math.PI / 2, 0]}
-            raycast={() => null}
-          >
-            <ringGeometry
-              args={[
-                pitchArcR - 0.0025,
-                pitchArcR + 0.0025,
-                40,
-                1,
-                Math.PI + (minPitch * Math.PI) / 180,
-                ((maxPitch - minPitch) * Math.PI) / 180,
-              ]}
-            />
-            <meshBasicMaterial
-              color="#10b981"
-              transparent
-              opacity={hoveredPart === 'pitch' || draggingAxis === 'pitch' ? 0.72 : 0.34}
-              depthWrite={false}
-              side={DoubleSide}
-            />
-          </mesh>
-          <group position={[pitchFlankX, panelY, panelZ]} rotation={[pitchRad, 0, 0]}>
-            <sprite
-              name="item-pitch-handle"
-              position={[0, 0, pitchArcR]}
-              scale={[0.036, 0.036, 1]}
-              renderOrder={10}
-              onPointerOver={(e) => {
-                e.stopPropagation();
-                setHoveredPart('pitch');
-                if (!draggingAxis) gl.domElement.style.cursor = 'grab';
-              }}
-              onPointerOut={(e) => {
-                e.stopPropagation();
-                setHoveredPart(null);
-                if (!draggingAxis) gl.domElement.style.cursor = 'auto';
-              }}
-              onPointerDown={startMonitorPitch}
-            >
-              <spriteMaterial map={pitchTex} transparent depthTest={false} />
-            </sprite>
-          </group>
+          {/* Screen-only horizontal swivel arc & handle (stock stand keeps base & column fixed) */}
+          {!hasMonitorArm && (
+            <group position={[0, screenYawY, panelZ]}>
+              <mesh name="item-screen-yaw-arc" rotation={[-Math.PI / 2, 0, 0]} raycast={() => null}>
+                <ringGeometry
+                  args={[
+                    screenYawArcR - 0.0025,
+                    screenYawArcR + 0.0025,
+                    36,
+                    1,
+                    -Math.PI / 2 - (MAX_SCREEN_YAW * Math.PI) / 180,
+                    (MAX_SCREEN_YAW * 2 * Math.PI) / 180,
+                  ]}
+                />
+                <meshBasicMaterial
+                  color="#6366f1"
+                  transparent
+                  opacity={
+                    hoveredPart === 'screenYaw' || draggingAxis === 'screenYaw' ? 0.78 : 0.42
+                  }
+                  depthWrite={false}
+                  side={DoubleSide}
+                />
+              </mesh>
+              <group rotation={[0, screenYawRad, 0]}>
+                <sprite
+                  name="item-screen-yaw-handle"
+                  position={[0, 0, screenYawArcR]}
+                  scale={[0.036, 0.036, 1]}
+                  renderOrder={10}
+                  onPointerOver={(e) => {
+                    e.stopPropagation();
+                    setHoveredPart('screenYaw');
+                    if (!draggingAxis) gl.domElement.style.cursor = 'grab';
+                  }}
+                  onPointerOut={(e) => {
+                    e.stopPropagation();
+                    setHoveredPart(null);
+                    if (!draggingAxis) gl.domElement.style.cursor = 'auto';
+                  }}
+                  onPointerDown={startMonitorScreenYaw}
+                >
+                  <spriteMaterial map={screenYawTex} transparent depthTest={false} />
+                </sprite>
+              </group>
+            </group>
+          )}
 
-          {/* Upper-right Roll arc & handle orbiting inside the screen's tilted plane */}
-          <group position={[0, panelY, panelZ]} rotation={[pitchRad, 0, 0]}>
-            <mesh name="item-roll-arc" position={[0, 0, 0.012]} raycast={() => null}>
+          {/* Side Pitch & front Roll gizmos follow the screen's VESA horizontal swivel */}
+          <group position={[0, panelY, panelZ]} rotation={[0, screenYawRad, 0]}>
+            {/* Side Pitch arc & handle in YZ hinge plane */}
+            <mesh
+              name="item-pitch-arc"
+              position={[pitchFlankX, 0, 0]}
+              rotation={[0, Math.PI / 2, 0]}
+              raycast={() => null}
+            >
               <ringGeometry
                 args={[
-                  rollArcR - 0.0025,
-                  rollArcR + 0.0025,
-                  48,
+                  pitchArcR - 0.0025,
+                  pitchArcR + 0.0025,
+                  40,
                   1,
-                  Math.PI / 2 - (55 * Math.PI) / 180,
-                  (110 * Math.PI) / 180,
+                  Math.PI + (minPitch * Math.PI) / 180,
+                  ((maxPitch - minPitch) * Math.PI) / 180,
                 ]}
               />
               <meshBasicMaterial
-                color="#f59e0b"
+                color="#10b981"
                 transparent
-                opacity={hoveredPart === 'roll' || draggingAxis === 'roll' ? 0.72 : 0.34}
+                opacity={hoveredPart === 'pitch' || draggingAxis === 'pitch' ? 0.72 : 0.34}
                 depthWrite={false}
                 side={DoubleSide}
               />
             </mesh>
-            <group rotation={[0, 0, rollRad]}>
+            <group position={[pitchFlankX, 0, 0]} rotation={[pitchRad, 0, 0]}>
               <sprite
-                name="item-roll-handle"
-                position={[Math.sin(0.32) * rollArcR, Math.cos(0.32) * rollArcR, 0.014]}
+                name="item-pitch-handle"
+                position={[0, 0, pitchArcR]}
                 scale={[0.036, 0.036, 1]}
                 renderOrder={10}
                 onPointerOver={(e) => {
                   e.stopPropagation();
-                  setHoveredPart('roll');
+                  setHoveredPart('pitch');
                   if (!draggingAxis) gl.domElement.style.cursor = 'grab';
                 }}
                 onPointerOut={(e) => {
@@ -747,10 +836,54 @@ export function ItemRotateGizmo({
                   setHoveredPart(null);
                   if (!draggingAxis) gl.domElement.style.cursor = 'auto';
                 }}
-                onPointerDown={startMonitorRoll}
+                onPointerDown={startMonitorPitch}
               >
-                <spriteMaterial map={rollTex} transparent depthTest={false} />
+                <spriteMaterial map={pitchTex} transparent depthTest={false} />
               </sprite>
+            </group>
+
+            {/* Upper-right Roll arc & handle orbiting inside the screen's tilted plane */}
+            <group rotation={[pitchRad, 0, 0]}>
+              <mesh name="item-roll-arc" position={[0, 0, 0.012]} raycast={() => null}>
+                <ringGeometry
+                  args={[
+                    rollArcR - 0.0025,
+                    rollArcR + 0.0025,
+                    48,
+                    1,
+                    Math.PI / 2 - (55 * Math.PI) / 180,
+                    (110 * Math.PI) / 180,
+                  ]}
+                />
+                <meshBasicMaterial
+                  color="#f59e0b"
+                  transparent
+                  opacity={hoveredPart === 'roll' || draggingAxis === 'roll' ? 0.72 : 0.34}
+                  depthWrite={false}
+                  side={DoubleSide}
+                />
+              </mesh>
+              <group rotation={[0, 0, rollRad]}>
+                <sprite
+                  name="item-roll-handle"
+                  position={[Math.sin(0.32) * rollArcR, Math.cos(0.32) * rollArcR, 0.014]}
+                  scale={[0.036, 0.036, 1]}
+                  renderOrder={10}
+                  onPointerOver={(e) => {
+                    e.stopPropagation();
+                    setHoveredPart('roll');
+                    if (!draggingAxis) gl.domElement.style.cursor = 'grab';
+                  }}
+                  onPointerOut={(e) => {
+                    e.stopPropagation();
+                    setHoveredPart(null);
+                    if (!draggingAxis) gl.domElement.style.cursor = 'auto';
+                  }}
+                  onPointerDown={startMonitorRoll}
+                >
+                  <spriteMaterial map={rollTex} transparent depthTest={false} />
+                </sprite>
+              </group>
             </group>
           </group>
         </group>

@@ -6,6 +6,7 @@ import { pauseOrbitUntilPointerUp } from './orbitPause';
 import {
   BufferGeometry,
   CanvasTexture,
+  Euler,
   ExtrudeGeometry,
   Float32BufferAttribute,
   Path,
@@ -625,6 +626,7 @@ export function MonitorModel({
   color,
   monitor,
   pitch = 0,
+  screenYaw = 0,
   roll = 0,
   lift = 0,
   hideStand = false,
@@ -636,6 +638,7 @@ export function MonitorModel({
   color: string;
   monitor?: MonitorSettings;
   pitch?: number;
+  screenYaw?: number;
   roll?: number;
   lift?: number;
   hideStand?: boolean;
@@ -649,6 +652,7 @@ export function MonitorModel({
         color={color}
         monitor={monitor}
         pitch={pitch}
+        screenYaw={screenYaw}
         roll={roll}
         lift={lift}
         hideStand={hideStand}
@@ -664,6 +668,7 @@ export function MonitorModel({
       color={color}
       monitor={monitor}
       pitch={pitch}
+      screenYaw={screenYaw}
       roll={roll}
       lift={lift}
       hideStand={hideStand}
@@ -678,6 +683,7 @@ function StudioDisplayModel({
   color,
   monitor,
   pitch = 0,
+  screenYaw = 0,
   roll = 0,
   lift = 0,
   hideStand = false,
@@ -688,6 +694,7 @@ function StudioDisplayModel({
   color: string;
   monitor?: MonitorSettings;
   pitch?: number;
+  screenYaw?: number;
   roll?: number;
   lift?: number;
   hideStand?: boolean;
@@ -701,7 +708,24 @@ function StudioDisplayModel({
     size,
     'studioDisplay',
   );
-  const pose = monitorPose(size, { pitch, roll, lift, monitor, hasMonitorArm: hideStand });
+  const pose = monitorPose(size, {
+    pitch,
+    screenYaw,
+    roll,
+    lift,
+    monitor,
+    hasMonitorArm: hideStand,
+  });
+  const screenEuler = useMemo(
+    () =>
+      new Euler(
+        (pose.pitchDeg * Math.PI) / 180,
+        (pose.screenYawDeg * Math.PI) / 180,
+        (pose.rollDeg * Math.PI) / 180,
+        'YXZ',
+      ),
+    [pose.pitchDeg, pose.screenYawDeg, pose.rollDeg],
+  );
   const tier = monitorBaseTier(size, monitor);
   const panelWidth = size.width;
   const basePanelY = standHeight + panelHeight / 2;
@@ -813,10 +837,7 @@ function StudioDisplayModel({
       )}
 
       {/* Unibody Apple Studio Display assembly */}
-      <group
-        position={[0, panelY, -0.02 + pose.pivotZOffset]}
-        rotation={[(pose.pitchDeg * Math.PI) / 180, 0, (pose.rollDeg * Math.PI) / 180]}
-      >
+      <group position={[0, panelY, -0.02 + pose.pivotZOffset]} rotation={screenEuler}>
         {screenLamp && (
           <group position={[0, panelHeight / 2, 0]}>
             <ScreenLampModel item={screenLamp} selected={lampSelected} />
@@ -906,6 +927,7 @@ function DellMonitorModel({
   color,
   monitor,
   pitch = 0,
+  screenYaw = 0,
   roll = 0,
   lift = 0,
   hideStand = false,
@@ -917,6 +939,7 @@ function DellMonitorModel({
   color: string;
   monitor?: MonitorSettings;
   pitch?: number;
+  screenYaw?: number;
   roll?: number;
   lift?: number;
   hideStand?: boolean;
@@ -946,7 +969,28 @@ function DellMonitorModel({
     size,
     monitor?.model,
   );
-  const pose = monitorPose(size, { pitch, roll, lift, monitor, hasMonitorArm: hideStand });
+  const pose = monitorPose(size, {
+    pitch,
+    screenYaw,
+    roll,
+    lift,
+    monitor,
+    hasMonitorArm: hideStand,
+  });
+  const screenEuler = useMemo(
+    () =>
+      new Euler(
+        (pose.pitchDeg * Math.PI) / 180,
+        (pose.screenYawDeg * Math.PI) / 180,
+        (pose.rollDeg * Math.PI) / 180,
+        'YXZ',
+      ),
+    [pose.pitchDeg, pose.screenYawDeg, pose.rollDeg],
+  );
+  const vesaHeadEuler = useMemo(
+    () => new Euler((pose.pitchDeg * Math.PI) / 180, (pose.screenYawDeg * Math.PI) / 180, 0, 'YXZ'),
+    [pose.pitchDeg, pose.screenYawDeg],
+  );
   const tier = monitorBaseTier(size, monitor);
   const panelWidth = size.width;
   const basePanelY = standHeight + panelHeight / 2;
@@ -955,12 +999,12 @@ function DellMonitorModel({
   // Dell UltraSharp stand: compact flat-rear fan platter + shortened fixed-height inclined column.
   // The carriage + cantilever neck + monitor assembly slide rigidly parallel to the inclined column
   // over [-5 cm .. +5 cm] (capped cleanly right above +5 cm max lift without unused tall riser).
-  const colZ = -0.064;
+  const colZ = -0.072;
   const colBaseY = 0.008;
   const colLeanRad = DELL_COLUMN_LEAN_RAD;
   const baseVisWidth = tier.baseWidth * 0.88;
   const baseVisDepth = tier.baseDepth * 0.88;
-  const baseCenterZ = colZ + baseVisDepth * 0.31;
+  const baseCenterZ = colZ + baseVisDepth * 0.35;
   const basePlateH = 0.007;
   const colFixedTopY = basePanelY + MAX_LIFT + 0.022;
   const colHeight = Math.max(0.16, colFixedTopY - colBaseY);
@@ -973,7 +1017,6 @@ function DellMonitorModel({
   const carriageColZ = colZ + Math.tan(colLeanRad) * (carriageY - colBaseY);
   const shuttleFrontZ = colDepth * 0.36;
   const panelZ = -0.02 + pose.pivotZOffset;
-  const vesaPlateZLocal = -0.039 + pose.pivotZOffset - carriageColZ;
   const hingeZLocal = -0.047 + pose.pivotZOffset - carriageColZ;
   const neckCenterZ = (shuttleFrontZ + hingeZLocal) / 2;
   const neckLengthZ = Math.max(0.016, hingeZLocal - shuttleFrontZ + 0.006);
@@ -1127,18 +1170,20 @@ function DellMonitorModel({
               <cylinderGeometry args={[0.0145, 0.0145, 0.044, 24]} />
               <meshStandardMaterial color="#959eab" metalness={0.72} roughness={0.28} />
             </mesh>
-            {/* Quick-release 112×112 mm VESA docking plate seated in curved monitor bay */}
+          </group>
+          {/* Quick-release 112×112 mm VESA docking plate seated in curved monitor bay (swivels & tilts with screen) */}
+          <group position={[0, panelY, panelZ]} rotation={vesaHeadEuler}>
             <RoundedBox
               args={[0.112, 0.112, 0.007]}
               radius={0.004}
               smoothness={2}
-              position={[0, 0, vesaPlateZLocal]}
+              position={[0, 0, -0.019]}
               castShadow
             >
               <meshStandardMaterial color="#202630" metalness={0.38} roughness={0.48} />
             </RoundedBox>
             {/* Bottom quick-release push button */}
-            <mesh position={[0, -0.055, vesaPlateZLocal - 0.002]} castShadow>
+            <mesh position={[0, -0.055, -0.021]} castShadow>
               <boxGeometry args={[0.024, 0.007, 0.008]} />
               <meshStandardMaterial color="#181d25" roughness={0.52} />
             </mesh>
@@ -1147,10 +1192,7 @@ function DellMonitorModel({
       )}
 
       {/* Screen sub-assembly: 612.44 × 353.51 × 55.60 mm U2725QE body sliding parallel to tilted column */}
-      <group
-        position={[0, panelY, panelZ]}
-        rotation={[(pose.pitchDeg * Math.PI) / 180, 0, (pose.rollDeg * Math.PI) / 180]}
-      >
+      <group position={[0, panelY, panelZ]} rotation={screenEuler}>
         {screenLamp && (
           <group position={[0, panelHeight / 2, 0]}>
             <ScreenLampModel item={screenLamp} selected={lampSelected} />

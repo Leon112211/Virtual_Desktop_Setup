@@ -8,6 +8,7 @@ export const cableKindValues = [
   'dp',
   'hdmi',
   'usbc',
+  'usba',
   'magsafe',
   'rj45',
   'power',
@@ -30,6 +31,10 @@ export type CableSpec = {
   defaultLengthM: number;
   /** Mainstream market or Apple official length presets in metres (with connectors). */
   presetLengthsM: readonly number[];
+  /** Bending resilience stiffness in [0, 1] governing curve resistance and sag smoothness. */
+  bendingStiffness: number;
+  /** Minimum allowed interior angle (degrees, >= 95° so cables never fold at acute bends). */
+  minInteriorAngleDeg: number;
   /** Whether length presets follow Apple's official fixed specification. */
   officialLengthNote?: string;
 };
@@ -43,6 +48,8 @@ export const cableMeta: Record<CableKind, CableSpec> = {
     connectorLen: 0.042,
     defaultLengthM: 1.5,
     presetLengthsM: [1, 1.5, 2, 3],
+    bendingStiffness: 0.78,
+    minInteriorAngleDeg: 116,
   },
   hdmi: {
     label: 'HDMI',
@@ -52,15 +59,30 @@ export const cableMeta: Record<CableKind, CableSpec> = {
     connectorLen: 0.038,
     defaultLengthM: 1.5,
     presetLengthsM: [1, 1.5, 2, 3],
+    bendingStiffness: 0.8,
+    minInteriorAngleDeg: 118,
   },
   usbc: {
     label: 'USB-C / 雷雳',
-    shortLabel: 'Type-C',
+    shortLabel: '双头 Type-C',
     color: '#3f4754',
     radius: 0.0024, // 4.8 mm OD
     connectorLen: 0.028,
     defaultLengthM: 1,
     presetLengthsM: [0.8, 1, 1.5, 2],
+    bendingStiffness: 0.56,
+    minInteriorAngleDeg: 108,
+  },
+  usba: {
+    label: 'USB-A 数据/供电线',
+    shortLabel: 'USB-A',
+    color: '#374151',
+    radius: 0.0023, // 4.6 mm USB-A cable OD
+    connectorLen: 0.032,
+    defaultLengthM: 1,
+    presetLengthsM: [0.8, 1, 1.5, 2],
+    bendingStiffness: 0.54,
+    minInteriorAngleDeg: 108,
   },
   magsafe: {
     label: 'MagSafe 3 充电线',
@@ -70,6 +92,8 @@ export const cableMeta: Record<CableKind, CableSpec> = {
     connectorLen: 0.025,
     defaultLengthM: 2,
     presetLengthsM: [2],
+    bendingStiffness: 0.44,
+    minInteriorAngleDeg: 102,
     officialLengthNote: '苹果官方 USB-C 转 MagSafe 3 连接线标准长度（含端子 2 m）',
   },
   rj45: {
@@ -80,6 +104,8 @@ export const cableMeta: Record<CableKind, CableSpec> = {
     connectorLen: 0.036,
     defaultLengthM: 1.5,
     presetLengthsM: [0.5, 1, 1.5, 2, 3, 5],
+    bendingStiffness: 0.68,
+    minInteriorAngleDeg: 112,
   },
   power: {
     label: '电源线 (IEC C13)',
@@ -89,6 +115,8 @@ export const cableMeta: Record<CableKind, CableSpec> = {
     connectorLen: 0.046,
     defaultLengthM: 1.8,
     presetLengthsM: [1.2, 1.5, 1.8, 3],
+    bendingStiffness: 0.86,
+    minInteriorAngleDeg: 122,
   },
   speakerWire: {
     label: '主副箱音箱连接线 (16AWG)',
@@ -98,6 +126,8 @@ export const cableMeta: Record<CableKind, CableSpec> = {
     connectorLen: 0.03,
     defaultLengthM: 2,
     presetLengthsM: [1.5, 2, 2.5, 3, 4.9],
+    bendingStiffness: 0.54,
+    minInteriorAngleDeg: 108,
   },
   aux35: {
     label: '3.5mm 音频线 (AUX)',
@@ -107,6 +137,8 @@ export const cableMeta: Record<CableKind, CableSpec> = {
     connectorLen: 0.028,
     defaultLengthM: 1.5,
     presetLengthsM: [0.8, 1.2, 1.5, 2, 3],
+    bendingStiffness: 0.46,
+    minInteriorAngleDeg: 104,
   },
   rca: {
     label: 'RCA 双莲花音频线',
@@ -116,6 +148,8 @@ export const cableMeta: Record<CableKind, CableSpec> = {
     connectorLen: 0.036,
     defaultLengthM: 1.5,
     presetLengthsM: [1, 1.5, 2, 3],
+    bendingStiffness: 0.6,
+    minInteriorAngleDeg: 110,
   },
   optical: {
     label: '光纤数字音频线 (TOSLINK)',
@@ -125,6 +159,8 @@ export const cableMeta: Record<CableKind, CableSpec> = {
     connectorLen: 0.032,
     defaultLengthM: 1.5,
     presetLengthsM: [1, 1.5, 2, 3],
+    bendingStiffness: 0.76,
+    minInteriorAngleDeg: 118,
   },
   trs635: {
     label: '6.35mm TRS 平衡音频线',
@@ -134,6 +170,8 @@ export const cableMeta: Record<CableKind, CableSpec> = {
     connectorLen: 0.044,
     defaultLengthM: 1.5,
     presetLengthsM: [1, 1.5, 2, 3],
+    bendingStiffness: 0.7,
+    minInteriorAngleDeg: 114,
   },
 };
 
@@ -175,13 +213,44 @@ export const cableSchema = z.object({
 export type CableEndpoint = z.infer<typeof cableEndpointSchema>;
 export type Cable = z.infer<typeof cableSchema>;
 
+/** Returns physical housing + strain-relief boot length (metres) for a specific end plug. */
+export function plugConnectorLen(kind: CableKind, plugType?: PlugSpecKind): number {
+  switch (plugType) {
+    case 'ganAdapter':
+      return 0.052;
+    case 'appleDuckhead':
+      return 0.035;
+    case 'cn3Pin':
+      return 0.034;
+    case 'cn2Pin':
+      return 0.03;
+    case 'rightAngle':
+      return 0.011;
+    case 'iecC13':
+      return 0.044;
+    case 'dp':
+      return 0.04;
+    case 'usbc':
+      return 0.026;
+    case 'usba':
+      return 0.03;
+    default:
+      return cableMeta[kind].connectorLen;
+  }
+}
+
 export function cableEffectiveLengths(
-  cable: Pick<Cable, 'kind' | 'lengthM' | 'lengthIncludesConnectors'>,
+  cable: Pick<
+    Cable,
+    'kind' | 'lengthM' | 'lengthIncludesConnectors' | 'fromPlugType' | 'toPlugType'
+  >,
 ) {
   const spec = cableMeta[cable.kind];
   const nominalM = cable.lengthM ?? spec.defaultLengthM;
   const includesConnectors = cable.lengthIncludesConnectors ?? true;
-  const bothConnectorsM = spec.connectorLen * 2;
+  const fromConnM = plugConnectorLen(cable.kind, cable.fromPlugType);
+  const toConnM = plugConnectorLen(cable.kind, cable.toPlugType);
+  const bothConnectorsM = Math.round((fromConnM + toConnM) * 1000) / 1000;
   const totalM = includesConnectors ? nominalM : nominalM + bothConnectorsM;
   const bodyM = Math.max(0.1, includesConnectors ? nominalM - bothConnectorsM : nominalM);
   return {
@@ -189,6 +258,8 @@ export function cableEffectiveLengths(
     includesConnectors,
     totalM: Math.round(totalM * 1000) / 1000,
     bodyM: Math.round(bodyM * 1000) / 1000,
+    fromConnM,
+    toConnM,
     bothConnectorsM,
   };
 }
@@ -199,15 +270,18 @@ export type PowerCablePreset = {
   badge: string;
   specText: string;
   kind: Extract<CableKind, 'power' | 'magsafe' | 'usbc'>;
-  /** Connector plug mounted at outlet / power-supply end. */
+  /** Optional port kinds distinguishing dual Type-C vs USB-A↔Type-C. */
+  fromPortKind?: CableKind;
+  toPortKind?: CableKind;
+  /** Connector plug mounted at outlet / power-supply end (optional extra accessory). */
   outletPlugType?: PlugSpecKind;
-  /** Connector plug mounted at device AC inlet (when applicable). */
+  /** Connector plug mounted at device end. */
   devicePlugType?: PlugSpecKind;
   color: string;
   lengthM: number;
 };
 
-/** Curated showcase catalog of power cords & fast-charging cables displayed in the left Cable Zone. */
+/** Curated showcase catalog of power cords & pure charging cables (charger heads are optional extra accessories). */
 export const POWER_CABLE_PRESETS: readonly PowerCablePreset[] = [
   {
     id: 'iec-c13-cn3',
@@ -246,42 +320,65 @@ export const POWER_CABLE_PRESETS: readonly PowerCablePreset[] = [
     id: 'magsafe3-official',
     name: 'MagSafe 3 磁吸编织线',
     badge: '官方 2m · 140W',
-    specText: '苹果银白编织磁吸线 + 苹果方形快充头',
+    specText: 'USB-C ↔ MagSafe 3（不含充电插头，可另选配件）',
     kind: 'magsafe',
-    outletPlugType: 'appleDuckhead',
+    fromPortKind: 'usbc',
+    toPortKind: 'magsafe',
     color: '#d4d8de',
     lengthM: 2,
   },
   {
-    id: 'apple-duckhead-usbc',
-    name: '苹果方头 Type-C 充电线',
-    badge: '96W 苹果方头',
-    specText: '苹果方形快充适配器 + 纯白 USB-C 编织线',
-    kind: 'usbc',
-    outletPlugType: 'appleDuckhead',
-    color: '#eef1f5',
-    lengthM: 2,
-  },
-  {
-    id: 'gan-140w-usbc',
-    name: '氮化镓 GaN 快充套装线',
-    badge: '140W GaN',
-    specText: '氮化镓快充头 + 高密度编织 Type-C 快充线',
-    kind: 'usbc',
-    outletPlugType: 'ganAdapter',
-    color: '#2d333f',
-    lengthM: 1.5,
-  },
-  {
     id: 'usbc-pd-100w',
-    name: 'USB-C PD 100W 双头直连线',
-    badge: 'C-to-C · 4.8mm',
-    specText: '双头 Type-C · 直连插排快充口或显示器反充',
+    name: '双头 Type-C 供电线',
+    badge: 'C ↔ C · 无插头',
+    specText: '纯线缆 Type-C ↔ Type-C · 直连 C 口或另选配插头',
     kind: 'usbc',
+    fromPortKind: 'usbc',
+    toPortKind: 'usbc',
+    devicePlugType: 'usbc',
+    outletPlugType: 'usbc',
     color: '#3f4754',
     lengthM: 1,
   },
+  {
+    id: 'usba-to-usbc-power',
+    name: 'USB 转 Type-C 供电线',
+    badge: 'A ↔ C · 无插头',
+    specText: '纯线缆 USB-A ↔ Type-C · 接 USB-A 口/显示器反充',
+    kind: 'usbc',
+    fromPortKind: 'usba',
+    toPortKind: 'usbc',
+    devicePlugType: 'usba',
+    outletPlugType: 'usbc',
+    color: '#374151',
+    lengthM: 1,
+  },
+  {
+    id: 'usbc-pd-240w-white',
+    name: '240W 编织双头 Type-C 线',
+    badge: 'C ↔ C · 2m 编织',
+    specText: '纯白高密编织 Type-C ↔ Type-C（不含充电插头）',
+    kind: 'usbc',
+    fromPortKind: 'usbc',
+    toPortKind: 'usbc',
+    devicePlugType: 'usbc',
+    outletPlugType: 'usbc',
+    color: '#eef1f5',
+    lengthM: 2,
+  },
 ];
+
+export type SignalCablePreset = {
+  id: string;
+  kind: Exclude<CableKind, 'power' | 'magsafe'>;
+  shortLabel: string;
+  label: string;
+  color: string;
+  fromPortKind?: CableKind;
+  toPortKind?: CableKind;
+  fromPlugType?: PlugSpecKind;
+  toPlugType?: PlugSpecKind;
+};
 
 export const SIGNAL_CABLE_KINDS: readonly Exclude<CableKind, 'power' | 'magsafe'>[] = [
   'dp',
@@ -295,17 +392,94 @@ export const SIGNAL_CABLE_KINDS: readonly Exclude<CableKind, 'power' | 'magsafe'
   'trs635',
 ];
 
+export const SIGNAL_CABLE_PRESETS: readonly SignalCablePreset[] = [
+  {
+    id: 'dp-dp',
+    kind: 'dp',
+    shortLabel: '双头 DP',
+    label: 'DisplayPort 双头线 (DP ↔ DP)',
+    color: cableMeta.dp.color,
+    fromPortKind: 'dp',
+    toPortKind: 'dp',
+    fromPlugType: 'dp',
+    toPlugType: 'dp',
+  },
+  {
+    id: 'dp-usbc',
+    kind: 'dp',
+    shortLabel: 'DP ↔ Type-C',
+    label: 'DP 转 Type-C 视频线 (DP ↔ USB-C)',
+    color: '#28303d',
+    fromPortKind: 'dp',
+    toPortKind: 'usbc',
+    fromPlugType: 'dp',
+    toPlugType: 'usbc',
+  },
+  {
+    id: 'usbc-usbc',
+    kind: 'usbc',
+    shortLabel: '双头 Type-C',
+    label: '双头 Type-C 线 (Type-C ↔ Type-C)',
+    color: cableMeta.usbc.color,
+    fromPortKind: 'usbc',
+    toPortKind: 'usbc',
+    fromPlugType: 'usbc',
+    toPlugType: 'usbc',
+  },
+  {
+    id: 'usba-usbc',
+    kind: 'usbc',
+    shortLabel: 'USB ↔ Type-C',
+    label: 'USB 转 Type-C 线 (USB-A ↔ Type-C)',
+    color: '#374151',
+    fromPortKind: 'usba',
+    toPortKind: 'usbc',
+    fromPlugType: 'usba',
+    toPlugType: 'usbc',
+  },
+  ...SIGNAL_CABLE_KINDS.filter((k) => k !== 'dp' && k !== 'usbc').map((kind) => ({
+    id: kind,
+    kind,
+    shortLabel: cableMeta[kind].shortLabel,
+    label: cableMeta[kind].label,
+    color: cableMeta[kind].color,
+  })),
+];
+
+/** Returns an accurate human-readable cable name distinguishing variants (DP, Type-C). */
+export function formatCableDisplayName(
+  cable: Pick<Cable, 'kind' | 'fromPlugType' | 'toPlugType'>,
+): string {
+  if (cable.kind === 'dp') {
+    if (cable.fromPlugType === 'usbc' || cable.toPlugType === 'usbc') {
+      return 'DP ↔ Type-C';
+    }
+    return '双头 DP';
+  }
+  if (cable.kind === 'usbc') {
+    if (cable.fromPlugType === 'usba' || cable.toPlugType === 'usba') {
+      return 'USB ↔ Type-C';
+    }
+    return '双头 Type-C';
+  }
+  return cableMeta[cable.kind].shortLabel;
+}
+
 /** Checks whether two physical port kinds can be joined by a single cable. */
 export function arePortKindsCompatible(a: CableKind, b: CableKind): boolean {
   if (a === b) return true;
   if ((a === 'rca' && b === 'aux35') || (a === 'aux35' && b === 'rca')) return true;
   if (a === 'magsafe' || b === 'magsafe') {
     const other = a === 'magsafe' ? b : a;
-    return other === 'power' || other === 'usbc';
+    return other === 'power' || other === 'usbc' || other === 'usba';
   }
   if (a === 'usbc' || b === 'usbc') {
     const other = a === 'usbc' ? b : a;
-    return other === 'dp' || other === 'hdmi' || other === 'power';
+    return other === 'usba' || other === 'dp' || other === 'hdmi' || other === 'power';
+  }
+  if (a === 'usba' || b === 'usba') {
+    const other = a === 'usba' ? b : a;
+    return other === 'power';
   }
   return false;
 }
@@ -314,38 +488,106 @@ export function arePortKindsCompatible(a: CableKind, b: CableKind): boolean {
 export function isPortCompatibleWithCable(portKind: CableKind, selectedKind: CableKind): boolean {
   if (portKind === selectedKind) return true;
   if (selectedKind === 'usbc') {
-    return portKind === 'dp' || portKind === 'hdmi' || portKind === 'power';
+    return portKind === 'usba' || portKind === 'dp' || portKind === 'hdmi' || portKind === 'power';
+  }
+  if (selectedKind === 'usba') {
+    return portKind === 'usbc' || portKind === 'power';
   }
   if (selectedKind === 'magsafe') {
-    return portKind === 'power' || portKind === 'usbc';
+    return portKind === 'power' || portKind === 'usbc' || portKind === 'usba';
   }
   if (selectedKind === 'rca') return portKind === 'aux35';
   if (selectedKind === 'aux35') return portKind === 'rca';
   return false;
 }
 
-/** Assigns outlet-side vs device-side plug housings accurately regardless of wiring click order. */
+/** Assigns outlet-side vs device-side / asymmetric signal plug housings accurately regardless of wiring click order. */
 export function resolveCablePlugEnds(options: {
   fromKind?: string;
   fromPortId: string;
+  fromPortKind?: CableKind;
   toKind?: string;
   toPortId?: string;
+  toPortKind?: CableKind;
   cableKind: CableKind;
   outletPlugType?: PlugSpecKind;
   devicePlugType?: PlugSpecKind;
 }): { fromPlugType?: PlugSpecKind; toPlugType?: PlugSpecKind } {
-  const { fromKind, fromPortId, toKind, toPortId, cableKind, outletPlugType, devicePlugType } =
-    options;
+  const {
+    fromKind,
+    fromPortId,
+    fromPortKind,
+    toKind,
+    toPortId,
+    toPortKind,
+    cableKind,
+    outletPlugType,
+    devicePlugType,
+  } = options;
   const fromIsOutlet =
-    (fromKind === 'powerStrip' || fromKind === 'wallOutlet') && fromPortId !== 'ac-in';
+    (fromKind === 'powerStrip' || fromKind === 'wallOutlet') && fromPortId.startsWith('slot-');
   const toIsOutlet =
-    (toKind === 'powerStrip' || toKind === 'wallOutlet') &&
-    Boolean(toPortId && toPortId !== 'ac-in');
+    (toKind === 'powerStrip' || toKind === 'wallOutlet') && Boolean(toPortId?.startsWith('slot-'));
 
-  const resolvedOutletPlug =
-    outletPlugType ??
-    (cableKind === 'power' ? 'cn3Pin' : cableKind === 'usbc' ? 'ganAdapter' : undefined);
-  const resolvedDevicePlug = devicePlugType;
+  // Signal cables with asymmetric DP ↔ Type-C endpoints match plug heads to port kinds
+  if (
+    !fromIsOutlet &&
+    !toIsOutlet &&
+    cableKind === 'dp' &&
+    (fromPortKind === 'usbc' ||
+      toPortKind === 'usbc' ||
+      devicePlugType === 'dp' ||
+      outletPlugType === 'usbc')
+  ) {
+    const isAsymmetricUsbc =
+      fromPortKind === 'usbc' ||
+      toPortKind === 'usbc' ||
+      outletPlugType === 'usbc' ||
+      devicePlugType === 'usbc';
+    if (!isAsymmetricUsbc) {
+      return { fromPlugType: 'dp', toPlugType: 'dp' };
+    }
+    if (fromPortKind === 'usbc' && toPortKind !== 'usbc') {
+      return { fromPlugType: 'usbc', toPlugType: 'dp' };
+    }
+    if (toPortKind === 'usbc' && fromPortKind !== 'usbc') {
+      return { fromPlugType: 'dp', toPlugType: 'usbc' };
+    }
+    return {
+      fromPlugType: devicePlugType ?? 'dp',
+      toPlugType: outletPlugType ?? 'usbc',
+    };
+  }
+
+  // Type-C family cables: USB-A ↔ Type-C vs Dual Type-C (charger adapters are NEVER auto-bundled)
+  if (!fromIsOutlet && !toIsOutlet && cableKind === 'usbc') {
+    const isAsymmetricUsbA =
+      fromPortKind === 'usba' ||
+      toPortKind === 'usba' ||
+      devicePlugType === 'usba' ||
+      outletPlugType === 'usba';
+    if (!isAsymmetricUsbA) {
+      return { fromPlugType: 'usbc', toPlugType: 'usbc' };
+    }
+    if (fromPortKind === 'usba' && toPortKind !== 'usba') {
+      return { fromPlugType: 'usba', toPlugType: 'usbc' };
+    }
+    if (toPortKind === 'usba' && fromPortKind !== 'usba') {
+      return { fromPlugType: 'usbc', toPlugType: 'usba' };
+    }
+    return {
+      fromPlugType: devicePlugType ?? 'usba',
+      toPlugType: outletPlugType ?? 'usbc',
+    };
+  }
+
+  // Only AC power cords default to 10A 3-pin wall plug; Type-C / MagSafe never auto-bundle adapters
+  const resolvedOutletPlug = outletPlugType ?? (cableKind === 'power' ? 'cn3Pin' : undefined);
+  const resolvedDevicePlug =
+    devicePlugType ??
+    (cableKind === 'usbc' && (fromPortKind === 'usba' || toPortKind === 'usba')
+      ? 'usba'
+      : undefined);
 
   if (fromIsOutlet && !toIsOutlet) {
     return {

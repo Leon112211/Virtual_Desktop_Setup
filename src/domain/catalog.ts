@@ -1,3 +1,4 @@
+import { cableMeta } from './cable';
 import { defaultControllerSettings, controllerPresetById } from './controller';
 import { DESK_WOOD_BASE_COLOR } from './desk';
 import { DELL_PLATINUM_SILVER } from './monitor';
@@ -184,18 +185,10 @@ export function makeItem(kind: BuiltinKind, hostId?: string): SceneItem {
 }
 
 export function defaultProject(): Project {
-  const monitor = makeItem('monitor'),
-    left = makeItem('speaker'),
-    right = makeItem('speaker'),
-    keys = makeItem('keyboard'),
-    pad = makeItem('controller'),
-    board = makeItem('pegboard');
-  Object.assign(monitor, { x: -0.12, z: -0.14 });
-  Object.assign(left, { x: -0.56, z: -0.15, speaker: defaultSpeakerSettings('passive') });
-  Object.assign(right, { x: 0.32, z: -0.14, speaker: defaultSpeakerSettings('active') });
-  Object.assign(keys, { x: -0.12, z: 0.16 });
-  Object.assign(pad, { x: 0.36, z: 0.19, rotation: -12 });
-  Object.assign(board, { x: 0.42, z: -0.26, size: { width: 0.4, height: 0.35, depth: 0.12 } });
+  const monitor = makeItem('monitor');
+  const macbook = makeItem('macbook');
+  Object.assign(monitor, { x: -0.16, z: -0.14 });
+  Object.assign(macbook, { x: 0.34, z: 0.06, rotation: -12 });
   return {
     schemaVersion: 1,
     id: uid(),
@@ -209,7 +202,22 @@ export function defaultProject(): Project {
       color: DESK_WOOD_BASE_COLOR,
       finish: 'wood',
     },
-    items: [monitor, left, right, keys, pad, board],
+    items: [monitor, macbook],
+    cables: [
+      {
+        id: uid(),
+        kind: 'usbc',
+        from: { type: 'device', itemId: monitor.id, portId: 'usbc' },
+        to: { type: 'device', itemId: macbook.id, portId: 'usbc1' },
+        fromPlugType: 'usbc',
+        toPlugType: 'usbc',
+        routeViaArm: true,
+        viaStandSlot: true,
+        color: cableMeta.usbc.color,
+        lengthM: 1,
+        lengthIncludesConnectors: true,
+      },
+    ],
     assets: [],
   };
 }

@@ -68,6 +68,7 @@ export type CableKind =
   | 'dp'
   | 'hdmi'
   | 'usbc'
+  | 'usba'
   | 'magsafe'
   | 'rj45'
   | 'power'
@@ -156,6 +157,13 @@ export function devicePorts(
         localDir: [0, -1, 0],
       },
       {
+        id: 'usba',
+        label: 'USB-A 下行口',
+        kind: 'usba',
+        localPos: [-0.055, y, z],
+        localDir: [0, -1, 0],
+      },
+      {
         id: 'audioOut',
         label: '3.5mm 音频输出',
         kind: 'aux35',
@@ -215,6 +223,13 @@ export function devicePorts(
         kind: 'aux35',
         localPos: [-w / 2, y, d * 0.08],
         localDir: [-1, 0, 0],
+      },
+      {
+        id: 'usba',
+        label: 'USB-A (右侧)',
+        kind: 'usba',
+        localPos: [w / 2, y, -d * 0.1],
+        localDir: [1, 0, 0],
       },
     ];
   }
@@ -658,7 +673,12 @@ export function devicePortWorld(
     });
     const panelY = pose.pivotY + panelHeight / 2;
     const screenQuat = new Quaternion().setFromEuler(
-      new Euler((pose.pitchDeg * Math.PI) / 180, 0, (pose.rollDeg * Math.PI) / 180, 'XYZ'),
+      new Euler(
+        (pose.pitchDeg * Math.PI) / 180,
+        (pose.screenYawDeg * Math.PI) / 180,
+        (pose.rollDeg * Math.PI) / 180,
+        'YXZ',
+      ),
     );
     worldPos.applyQuaternion(screenQuat).add(new Vector3(0, panelY, -0.02 + pose.pivotZOffset));
     worldDir.applyQuaternion(screenQuat);

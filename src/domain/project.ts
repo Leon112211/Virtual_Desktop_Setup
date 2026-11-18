@@ -4,6 +4,7 @@ import {
   DESK_FINISHES,
   DESK_MAX_CORNER_RADIUS,
   GROMMET_DIAMETERS,
+  PARTITION_MATERIALS,
   PARTITION_MAX_HEIGHT,
   PARTITION_MIN_HEIGHT,
   RETURN_MAX_EXTENSION,
@@ -129,6 +130,7 @@ export const deskSchema = z
         left: z.boolean(),
         right: z.boolean(),
         height: finite.min(PARTITION_MIN_HEIGHT).max(PARTITION_MAX_HEIGHT),
+        material: z.enum(PARTITION_MATERIALS).optional(),
       })
       .optional(),
     shelf: z
@@ -180,9 +182,10 @@ export const itemSchema = z
     rotation: finite.min(-36000).max(36000),
     surface: z.enum(['desk', 'shelf', 'wall', 'floor']).optional(),
     wallY: finite.min(0.02).max(WALL_MAX_HEIGHT).optional(),
-    // Monitor-only screen pose: tilt (俯仰), pivot/portrait (旋转), and the
-    // screen's raise above the stand (屏幕高度). Yaw reuses `rotation`.
+    // Monitor-only screen pose: tilt (俯仰), screen-only swivel (纯屏幕左右旋转 ±30°),
+    // pivot/portrait (翻转), and raise above stand (屏幕高度). Whole-stand yaw reuses `rotation`.
     pitch: finite.min(-45).max(45).optional(),
+    screenYaw: finite.min(-30).max(30).optional(),
     roll: finite.min(-90).max(90).optional(),
     lift: finite.min(-0.35).max(0.45).optional(),
     lidAngle: finite.min(0).max(MAX_LID_ANGLE).optional(),
@@ -211,6 +214,7 @@ export const itemSchema = z
         i.rotation !== 0 ||
         i.assetId !== undefined ||
         i.pitch !== undefined ||
+        i.screenYaw !== undefined ||
         i.roll !== undefined ||
         i.lift !== undefined ||
         i.surface !== undefined ||

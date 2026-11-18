@@ -1973,6 +1973,18 @@ button.active {
 .arm-elbow-pill {
   background: rgba(34, 68, 168, 0.92);
 }
+.arm-limit-pill button {
+  pointer-events: auto;
+  background: rgba(255, 255, 255, 0.95);
+  color: #1e3a8a;
+  border: none;
+  border-radius: 999px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.arm-limit-pill button:hover {
+  background: #ffffff;
+}
 .inspector-mini-btn {
   display: inline-flex;
   align-items: center;

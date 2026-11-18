@@ -8,6 +8,7 @@ import {
   constrainMonitorPose,
   findContainingHole,
   findItemCollisions,
+  getItemSolidBoxes,
   getSceneCableHoles,
   getSceneSolidBoxes,
   projectCablePointClear,
@@ -17,13 +18,15 @@ import {
   solveArmLowerPitchWithCollision,
   solveArmUpperPitchWithCollision,
 } from './collision';
+import { monitorPose } from './monitor';
 import {
   applyArmSolutionToProject,
   ARM_LOWER_LENGTH,
   ARM_UPPER_LENGTH,
   computeMonitorArmSystem,
 } from './monitorArm';
-import { projectSchema } from './project';
+import { projectSchema, type SceneItem } from './project';
+import { devicePorts } from './ports';
 import { useEditor } from '../store/editorStore';
 
 describe('physical anti-clipping collision & hole-aware cable routing', () => {
@@ -162,7 +165,7 @@ describe('physical anti-clipping collision & hole-aware cable routing', () => {
 
   it('supports interactive 3D port-to-port wiring and waypoint insertion/mutation/reset via store', () => {
     const store = useEditor;
-    store.getState().replace(defaultProject(), new Map());
+    store.getState().replace({ ...defaultProject(), cables: [] }, new Map());
     store.getState().add('powerStrip');
     const strip = store.getState().project.items.find((i) => i.kind === 'powerStrip')!;
     const monitor = store.getState().project.items.find((i) => i.kind === 'monitor')!;
@@ -220,16 +223,49 @@ describe('physical anti-clipping collision & hole-aware cable routing', () => {
     expect(raisedRoll90.hitObstacle).toBeUndefined();
     expect(raisedRoll90.item.roll).toBe(90);
 
-    // 2. Stock stand column self-collision clamps excessive downward pitch (+45° -> ~+22°..+25°)
+    // 2. Stock stand column front-face self-collision clamps excessive downward pitch (+45° -> ~+8°..+12°)
+    // without letting the lower bezel slice through the 2.1 cm thick stand column
     monitor.lift = 0;
     monitor.roll = 0;
     const pitchRes = constrainMonitorPose(monitor, { pitch: 45 }, proj.desk, proj.items);
     expect(pitchRes.hitObstacle).toBe('支架立柱');
-    expect(pitchRes.item.pitch!).toBeGreaterThan(20);
-    expect(pitchRes.item.pitch!).toBeLessThan(26);
+    expect(pitchRes.item.pitch!).toBeGreaterThan(5);
+    expect(pitchRes.item.pitch!).toBeLessThan(19);
     expect(checkMonitorPoseCollision(pitchRes.item, proj.desk, proj.items)).toBeNull();
+    expect(checkMonitorPoseCollision({ ...monitor, pitch: 20 }, proj.desk, proj.items)).toBe(
+      '支架立柱',
+    );
 
-    // 3. Peer item & back wall collision when rotating yaw
+    // Studio Display L-arm also blocks excessive downward pitch without clipping the aluminum arm
+    const studioMon: SceneItem = {
+      ...monitor,
+      id: 'studio-mon',
+      monitor: { model: 'studioDisplay', standType: 'tilt' },
+    };
+    const studioPitchRes = constrainMonitorPose(studioMon, { pitch: 25 }, proj.desk, [studioMon]);
+    expect(studioPitchRes.hitObstacle).toBe('支架立柱');
+    expect(studioPitchRes.item.pitch!).toBeLessThan(20);
+    expect(checkMonitorPoseCollision(studioPitchRes.item, proj.desk, [studioMon])).toBeNull();
+
+    // 3. Two-dimensional Yaw on stock stand:
+    //    (a) screenYaw rotates only the screen panel (+-30° mechanical limit) while stand base/column stay fixed
+    const swiveled30 = constrainMonitorPose(monitor, { screenYaw: 45 }, proj.desk, proj.items);
+    expect(swiveled30.hitObstacle).toBeUndefined();
+    expect(monitorPose(swiveled30.item.size, swiveled30.item).screenYawDeg).toBe(30);
+    const swiveledBoxes = getItemSolidBoxes({ ...monitor, screenYaw: 25 }, proj.desk, proj.items);
+    const baseBox = swiveledBoxes.find((b) => b.id.endsWith(':base'))!;
+    const colBox = swiveledBoxes.find((b) => b.id.endsWith(':col--1'))!;
+    const panelBox = swiveledBoxes.find((b) => b.id.endsWith(':panel'))!;
+    expect(baseBox.yaw).toBeCloseTo(0, 5);
+    expect(colBox.yaw).toBeCloseTo(0, 5);
+    expect(panelBox.yaw).toBeCloseTo((25 * Math.PI) / 180, 4);
+
+    // Mounted on monitor arm overrides screenYawDeg back to 0 (arm handles screen swivel directly)
+    expect(
+      monitorPose(monitor.size, { ...monitor, screenYaw: 25, hasMonitorArm: true }).screenYawDeg,
+    ).toBe(0);
+
+    //    (b) Peer item collision when rotating base yaw OR screen-only yaw
     const speaker = makeItem('speaker');
     speaker.x = monitor.x + 0.22;
     speaker.z = monitor.z + 0.16;
@@ -239,6 +275,141 @@ describe('physical anti-clipping collision & hole-aware cable routing', () => {
     expect(yawRes.hitObstacle).toBe(speaker.name);
     expect(Math.abs(yawRes.item.rotation)).toBeLessThan(55);
     expect(checkMonitorPoseCollision(yawRes.item, proj.desk, proj.items)).toBeNull();
+
+    const screenYawBlocked = constrainMonitorPose(
+      monitor,
+      { screenYaw: -30 },
+      proj.desk,
+      proj.items,
+    );
+    expect(screenYawBlocked.hitObstacle).toBe(speaker.name);
+    expect(Math.abs(screenYawBlocked.item.screenYaw!)).toBeLessThan(30);
+    expect(checkMonitorPoseCollision(screenYawBlocked.item, proj.desk, proj.items)).toBeNull();
+
+    // 4. Negative pitch (tilting top backward) + screenYaw + lowered lift must stop before
+    // the Dell curved rear dome clips into the upper cap of the stand column
+    const cleanProj = defaultProject();
+    const cleanMon = cleanProj.items.find((i) => i.kind === 'monitor')!;
+    cleanMon.lift = -0.05;
+    cleanMon.screenYaw = 25;
+    const upperClipRes = constrainMonitorPose(
+      cleanMon,
+      { pitch: -21 },
+      cleanProj.desk,
+      cleanProj.items,
+    );
+    if (upperClipRes.hitObstacle) {
+      expect(upperClipRes.hitObstacle).toBe('支架立柱');
+    }
+    expect(
+      checkMonitorPoseCollision(upperClipRes.item, cleanProj.desk, cleanProj.items),
+    ).toBeNull();
+    expect(
+      checkMonitorPoseCollision(
+        { ...cleanMon, lift: -0.05, screenYaw: 30, pitch: -21 },
+        cleanProj.desk,
+        cleanProj.items,
+      ),
+    ).toBe('支架立柱');
+  });
+
+  it('prevents monitor-connected cables from clipping through the monitor stand baseplate', () => {
+    const proj = defaultProject();
+    const monitor = proj.items.find((i) => i.kind === 'monitor')!;
+    const mac = makeItem('macbook');
+    mac.x = 0.42;
+    mac.z = 0.08;
+    proj.items.push(mac);
+
+    const macPort = devicePorts(mac).find((p) => p.kind === 'usbc')!;
+    const cable = {
+      id: 'c-mon-mac-base-guard',
+      kind: 'dp' as const,
+      toPlugType: 'usbc' as const,
+      from: { type: 'device' as const, itemId: monitor.id, portId: 'dp' },
+      to: { type: 'device' as const, itemId: mac.id, portId: macPort.id },
+      routeViaArm: false,
+      viaStandSlot: false,
+      color: '#1e2633',
+      lengthM: 1.5,
+    };
+    proj.cables = [cable];
+
+    const resolved = computeCablePath(cable, proj)!;
+    expect(resolved).not.toBeNull();
+    const solids = getSceneSolidBoxes(proj);
+    const baseBox = solids.find((s) => s.id === `item:${monitor.id}:base`)!;
+    expect(baseBox).toBeDefined();
+
+    // Check dense samples along every cable segment stay strictly outside the monitor baseplate
+    for (let i = 1; i < resolved.points.length; i++) {
+      const a = resolved.points[i - 1];
+      const b = resolved.points[i];
+      for (let s = 0; s <= 10; s++) {
+        const pt = new Vector3().lerpVectors(a, b, s / 10);
+        const c = Math.cos(baseBox.yaw);
+        const sn = Math.sin(baseBox.yaw);
+        const lx = (pt.x - baseBox.cx) * c - (pt.z - baseBox.cz) * sn;
+        const lz = (pt.x - baseBox.cx) * sn + (pt.z - baseBox.cz) * c;
+        const insideFootprint =
+          Math.abs(lx) < baseBox.halfW - 0.002 && Math.abs(lz) < baseBox.halfD - 0.002;
+        if (insideFootprint && pt.y >= baseBox.minY - 0.002) {
+          expect(pt.y).toBeGreaterThanOrEqual(baseBox.maxY + 0.002);
+        }
+      }
+    }
+  });
+
+  it('prevents under-desk cables from slicing diagonally through the rear under-desk stretcher crossbar', () => {
+    const proj = defaultProject();
+    const monitor = proj.items.find((i) => i.kind === 'monitor')!;
+    const floorOutlet = makeItem('wallOutlet');
+    floorOutlet.surface = 'floor';
+    floorOutlet.wallOutlet = {
+      ...(floorOutlet.wallOutlet ?? {
+        outletType: 'combo5',
+        gangs: 1,
+        usbA: 0,
+        usbC: 0,
+      }),
+      mount: 'floor',
+    };
+    floorOutlet.x = 0.28;
+    floorOutlet.z = -0.14;
+    proj.items.push(floorOutlet);
+
+    const outletPort = devicePorts(floorOutlet).find((p) => p.kind === 'power')!;
+    const cable = {
+      id: 'c-stretcher-guard',
+      kind: 'power' as const,
+      from: { type: 'device' as const, itemId: monitor.id, portId: 'power' },
+      to: { type: 'device' as const, itemId: floorOutlet.id, portId: outletPort.id },
+      drop: 'backEdge' as const,
+      routeViaArm: false,
+      viaStandSlot: false,
+      color: '#18181b',
+      lengthM: 2.5,
+      lengthIncludesConnectors: true,
+    };
+    proj.cables = [cable];
+
+    const resolved = computeCablePath(cable, proj)!;
+    expect(resolved).not.toBeNull();
+    const stretcher = getSceneSolidBoxes(proj).find((s) => s.id === 'desk-stretcher-back')!;
+    expect(stretcher).toBeDefined();
+
+    // Dense 5mm check along all segments: ZERO samples may slice through desk-stretcher-back
+    for (let i = 1; i < resolved.points.length; i++) {
+      const a = resolved.points[i - 1];
+      const b = resolved.points[i];
+      for (let s = 0; s <= 12; s++) {
+        const pt = new Vector3().lerpVectors(a, b, s / 12);
+        const insideX = Math.abs(pt.x - stretcher.cx) < stretcher.halfW - 0.002;
+        const insideY = pt.y > stretcher.minY + 0.002 && pt.y < stretcher.maxY - 0.002;
+        const insideZ = Math.abs(pt.z - stretcher.cz) < stretcher.halfD - 0.002;
+        expect(insideX && insideY && insideZ).toBe(false);
+      }
+    }
   });
 
   it('prevents monitor arm links and mounted monitor from clipping into desk surface or adjacent desktop speakers', () => {
@@ -308,6 +479,13 @@ describe('physical anti-clipping collision & hole-aware cable routing', () => {
     // 2. Over clear desktop area, pushing upper arm steeply downward stops cleanly at desktop clearance
     store.getState().commit((p) => {
       p.items = p.items.filter((it) => it.id === monitor.id || it.id === arm().id);
+      const keepIds = new Set(p.items.map((it) => it.id));
+      p.cables = (p.cables ?? []).filter(
+        (c) =>
+          (c.from.type !== 'device' || keepIds.has(c.from.itemId)) &&
+          (c.to.type !== 'device' || keepIds.has(c.to.itemId)),
+      );
+      if (p.cables.length === 0) delete p.cables;
     });
     const sysAfterSwivel = computeMonitorArmSystem(
       arm(),
@@ -393,6 +571,16 @@ describe('physical anti-clipping collision & hole-aware cable routing', () => {
 
     // 4. Dragging the arm base across the desk stops cleanly before colliding into desktop items
     store.getState().replace(defaultProject(), new Map());
+    const rightSpk = makeItem('speaker');
+    rightSpk.x = 0.32;
+    rightSpk.z = -0.14;
+    const pegBoard = makeItem('pegboard');
+    pegBoard.x = 0.42;
+    pegBoard.z = -0.26;
+    pegBoard.size = { width: 0.4, height: 0.35, depth: 0.12 };
+    store.getState().commit((p) => {
+      p.items.push(rightSpk, pegBoard);
+    });
     const mon = store.getState().project.items.find((i) => i.kind === 'monitor')!;
     store.getState().select(mon.id);
     store.getState().add('monitorArm');

@@ -14,7 +14,14 @@ import {
   isMonitorMountedOnArm,
   type ArmClampEdge,
 } from './laptop';
-import { DELL_COLUMN_LEAN_RAD, monitorBaseTier, monitorParts, monitorPose } from './monitor';
+import {
+  DELL_COLUMN_LEAN_RAD,
+  MAX_LIFT,
+  STUDIO_MAX_LIFT,
+  monitorBaseTier,
+  monitorParts,
+  monitorPose,
+} from './monitor';
 import {
   computeMonitorArmSystem,
   solveArmBaseMove,
@@ -88,7 +95,7 @@ export function getSceneCableHoles(project: Pick<Project, 'desk' | 'items'>): Ca
     const tier = monitorBaseTier(item.size, item.monitor);
     const isStudio = item.monitor?.model === 'studioDisplay';
 
-    const localHoleZ = isStudio ? -0.056 : -0.066;
+    const localHoleZ = isStudio ? -0.056 : -0.074;
     const localHoleY = isStudio ? 0.058 : Math.min(0.064, tier.baseDepth * 0.38);
     const frontOffset = 0.015;
     const backOffset = -0.018;
@@ -179,22 +186,24 @@ export function getItemSolidBoxes(item: SceneItem, desk: Desk, items: SceneItem[
     if (!mounted) {
       const tier = monitorBaseTier(item.size, item.monitor);
       const isStudio = item.monitor?.model === 'studioDisplay';
+      const baseLocalZ = isStudio ? -0.025 : -0.072 + tier.baseDepth * 0.88 * 0.35;
+      const baseScale = isStudio ? 0.94 : 0.9;
       boxes.push({
         id: `item:${item.id}:base`,
         label: `${item.name} 底座`,
         kind: 'item',
         itemId: item.id,
-        cx: item.x,
-        cz: item.z,
-        halfW: (tier.baseWidth * 0.9) / 2,
-        halfD: (tier.baseDepth * 0.9) / 2,
+        cx: item.x + baseLocalZ * Math.sin(yaw),
+        cz: item.z + baseLocalZ * Math.cos(yaw),
+        halfW: (tier.baseWidth * baseScale) / 2,
+        halfD: (tier.baseDepth * baseScale) / 2,
         yaw,
         minY: baseY,
-        maxY: baseY + 0.012,
+        maxY: baseY + (isStudio ? 0.009 : 0.011),
       });
 
       // Stand column left & right pillars flanking the central oval cable pass-through hole
-      const colZ = isStudio ? -0.056 : -0.068;
+      const colZ = isStudio ? -0.056 : -0.074;
       const holeHalfW = 0.011;
       const pillarW = Math.max(0.014, (tier.columnWidth - holeHalfW * 2) / 2);
       const offsetX = holeHalfW + pillarW / 2;
@@ -220,6 +229,7 @@ export function getItemSolidBoxes(item: SceneItem, desk: Desk, items: SceneItem[
     const panelCenterY = baseY + pose.pivotY + parts.panelHeight / 2;
     if (
       Math.abs(pose.pitchDeg) < 0.5 &&
+      Math.abs(pose.screenYawDeg) < 0.5 &&
       Math.abs(pose.rollDeg) < 0.5 &&
       Math.abs(pose.pivotZOffset) < 0.002
     ) {
@@ -240,9 +250,12 @@ export function getItemSolidBoxes(item: SceneItem, desk: Desk, items: SceneItem[
     }
 
     const pitchRad = (pose.pitchDeg * Math.PI) / 180;
+    const screenYawRad = (pose.screenYawDeg * Math.PI) / 180;
     const rollRad = (pose.rollDeg * Math.PI) / 180;
     const cosP = Math.cos(pitchRad);
     const sinP = Math.sin(pitchRad);
+    const cosSY = Math.cos(screenYawRad);
+    const sinSY = Math.sin(screenYawRad);
     const cosR = Math.cos(rollRad);
     const sinR = Math.sin(rollRad);
     const cosY = Math.cos(yaw);
@@ -276,8 +289,10 @@ export function getItemSolidBoxes(item: SceneItem, desk: Desk, items: SceneItem[
         rxMin = -halfW * 0.5;
         rxMax = halfW * 0.5;
       }
-      const mxMid = (rxMin + rxMax) / 2;
-      const mzMid = panelZ + ryMid * sinP;
+      const sxMid = (rxMin + rxMax) / 2;
+      const szMid = ryMid * sinP;
+      const mxMid = sxMid * cosSY + szMid * sinSY;
+      const mzMid = panelZ - sxMid * sinSY + szMid * cosSY;
       const sliceHalfW = Math.max(0.015, (rxMax - rxMin) / 2);
       const sliceHalfD = Math.max(
         0.018,
@@ -295,7 +310,7 @@ export function getItemSolidBoxes(item: SceneItem, desk: Desk, items: SceneItem[
         cz: item.z - mxMid * sinY + mzMid * cosY,
         halfW: sliceHalfW,
         halfD: sliceHalfD,
-        yaw,
+        yaw: yaw + screenYawRad,
         minY: Math.min(yA, yB) - yPad,
         maxY: Math.max(yA, yB) + yPad,
       });
@@ -409,6 +424,20 @@ export function getSceneSolidBoxes(
       minY: 0,
       maxY: minDeskY,
     });
+  });
+
+  // 2b. Rear under-desk stretcher rail connecting back legs (matches Desk.tsx geometry).
+  boxes.push({
+    id: 'desk-stretcher-back',
+    label: '桌下后横梁',
+    kind: 'leg',
+    cx: 0,
+    cz: -desk.depth / 2 + DESK_LEG_INSET_X,
+    halfW: Math.max(0.05, desk.width / 2 - DESK_LEG_INSET_Z),
+    halfD: 0.0175,
+    yaw: 0,
+    minY: minDeskY - 0.075,
+    maxY: minDeskY - 0.015,
   });
 
   // 3. Shelf & Partitions on rectangular desk
@@ -935,8 +964,18 @@ export function findContainingHole(
 }
 
 /**
+ * Returns true when a SolidBox belongs to a cable's own plugged endpoint housing/panel
+ * (excluding monitor stand baseplates & column pillars, which cables must never penetrate).
+ */
+function isAllowedSolidForCable(s: SolidBox, allowedItemIds: Set<string>): boolean {
+  if (!s.itemId || !allowedItemIds.has(s.itemId)) return false;
+  if (s.id.endsWith(':base') || s.id.includes(':col-')) return false;
+  return true;
+}
+
+/**
  * Projects a single 3D cable control point / sample out of any solid collision boxes
- * (unless inside a pass-through cable hole or the endpoint device being plugged into).
+ * (unless inside a pass-through cable hole or the endpoint device's port housing).
  */
 export function projectCablePointClear(
   pt: Vector3,
@@ -958,7 +997,7 @@ export function projectCablePointClear(
 
   for (let pass = 0; pass < 3; pass++) {
     for (const s of solids) {
-      if (s.itemId && allowedItemIds.has(s.itemId)) continue;
+      if (isAllowedSolidForCable(s, allowedItemIds)) continue;
       if (s.kind === 'wall') {
         const wallFrontZ = s.cx + s.halfD; // unused
         void wallFrontZ;
@@ -991,10 +1030,16 @@ export function projectCablePointClear(
         const penYTop = eyMax - out.y;
         const penYBot = out.y - eyMin;
 
-        // Partitions & legs always push out horizontally (+Z / +/-X) rather than teleporting over top
-        const allowY = s.kind !== 'partition' && s.kind !== 'leg';
+        // Partitions & vertical legs always push horizontally (+Z / +/-X); horizontal stretcher bars
+        // allow clearing downward underneath the beam rather than splitting across -Z/+Z faces.
+        const isStretcher = s.id.startsWith('desk-stretcher-');
+        const allowY = s.kind !== 'partition' && (s.kind !== 'leg' || isStretcher);
         const bestY =
-          s.kind === 'desk' || s.kind === 'shelf' ? Math.min(penYTop, penYBot) : penYTop;
+          s.kind === 'desk' || s.kind === 'shelf'
+            ? Math.min(penYTop, penYBot)
+            : isStretcher
+              ? penYBot
+              : penYTop;
 
         if (allowY && bestY <= Math.min(penX, penZ)) {
           out.y = bestY === penYBot ? eyMin : eyMax;
@@ -1054,6 +1099,264 @@ export function resolveCablePathClearance(
   return { points: out, adjusted };
 }
 
+/**
+ * Tests continuous sub-samples along every cable segment against all SolidBoxes (desk rims,
+ * oak corners, speakers, under-desk beams, and legs) so oblique segments never slice corners.
+ */
+export function resolveSegmentClearance(
+  points: Vector3[],
+  radius: number,
+  solids: SolidBox[],
+  holes: CableHole[],
+  allowedItemIds: Set<string>,
+): { points: Vector3[]; adjusted: boolean } {
+  if (points.length < 2) return { points: points.map((p) => p.clone()), adjusted: false };
+  const padRadius = radius + 0.003;
+
+  // Step 1: Any segment jumping between above-surface and below-slab outside a grommet
+  // wraps cleanly around the nearest desk/shelf edge via a smooth rounded outer arc.
+  const wrapped: Vector3[] = [points[0].clone()];
+  let adjusted = false;
+
+  for (let i = 1; i < points.length; i++) {
+    const a = wrapped[wrapped.length - 1];
+    const b = points[i];
+    const isEndStub = i === 1 || i === points.length - 1;
+    if (!isEndStub) {
+      for (const box of solids) {
+        if (box.kind !== 'desk' && box.kind !== 'shelf') continue;
+        if (box.itemId && allowedItemIds.has(box.itemId)) continue;
+        const c = Math.cos(box.yaw);
+        const sn = Math.sin(box.yaw);
+        const aLx = (a.x - box.cx) * c - (a.z - box.cz) * sn;
+        const aLz = (a.x - box.cx) * sn + (a.z - box.cz) * c;
+        const bLx = (b.x - box.cx) * c - (b.z - box.cz) * sn;
+        const bLz = (b.x - box.cx) * sn + (b.z - box.cz) * c;
+
+        const aAbove = a.y >= box.maxY - 0.005;
+        const bBelow = b.y < box.maxY - 0.005;
+        const bAbove = b.y >= box.maxY - 0.005;
+        const aBelow = a.y < box.maxY - 0.005;
+        const crossesVert = (aAbove && bBelow) || (bAbove && aBelow);
+        if (!crossesVert) continue;
+
+        const tCross = Math.max(
+          0,
+          Math.min(1, (box.maxY - a.y) / (Math.abs(b.y - a.y) < 1e-5 ? 1e-5 : b.y - a.y)),
+        );
+        const crossPt = new Vector3().lerpVectors(a, b, tCross);
+        if (findContainingHole(crossPt, radius, holes)?.kind === 'grommet') continue;
+
+        const mLx = aLx + (bLx - aLx) * tCross;
+        const mLz = aLz + (bLz - aLz) * tCross;
+        const ex = box.halfW + padRadius + 0.006;
+        const ez = box.halfD + padRadius + 0.006;
+        const overlapsSlab =
+          (Math.abs(mLx) < ex && Math.abs(mLz) < ez) ||
+          (Math.abs(aLx) < ex && Math.abs(aLz) < ez && Math.abs(bLx) < ex && Math.abs(bLz) < ez) ||
+          crossesBoxDiag(aLx, aLz, bLx, bLz, ex, ez);
+
+        if (overlapsSlab) {
+          adjusted = true;
+          const distLeft = Math.abs(mLx + ex);
+          const distRight = Math.abs(ex - mLx);
+          const distBack = Math.abs(mLz + ez);
+          const distFront = Math.abs(ez - mLz);
+          const minEdge = Math.min(distLeft, distRight, distBack, distFront);
+
+          let rimLx = mLx;
+          let rimLz = mLz;
+          if (minEdge === distLeft) rimLx = -ex - 0.008;
+          else if (minEdge === distRight) rimLx = ex + 0.008;
+          else if (minEdge === distBack) rimLz = -ez - 0.008;
+          else rimLz = ez + 0.008;
+
+          const toWorld = (lx: number, lz: number, y: number) =>
+            new Vector3(box.cx + lx * c + lz * sn, y, box.cz - lx * sn + lz * c);
+
+          const rimTopY = box.maxY + padRadius + 0.002;
+          const rimBotY = box.minY - padRadius - 0.002;
+          const topLx = aAbove ? (Math.abs(aLx) < ex ? mLx : aLx) : rimLx;
+          const topLz = aAbove ? (Math.abs(aLz) < ez ? mLz : aLz) : rimLz;
+
+          if (aAbove) {
+            wrapped.push(
+              toWorld(
+                minEdge === distLeft || minEdge === distRight ? rimLx * 0.99 : topLx,
+                minEdge === distBack || minEdge === distFront ? rimLz * 0.99 : topLz,
+                rimTopY,
+              ),
+              toWorld(rimLx, rimLz, (rimTopY + rimBotY) * 0.5),
+              toWorld(rimLx, rimLz, Math.min(rimBotY, b.y + 0.02)),
+            );
+          } else {
+            wrapped.push(
+              toWorld(rimLx, rimLz, Math.min(rimBotY, a.y + 0.02)),
+              toWorld(rimLx, rimLz, (rimTopY + rimBotY) * 0.5),
+              toWorld(
+                minEdge === distLeft || minEdge === distRight ? rimLx * 0.99 : mLx,
+                minEdge === distBack || minEdge === distFront ? rimLz * 0.99 : mLz,
+                rimTopY,
+              ),
+            );
+          }
+          break;
+        }
+      }
+    }
+    wrapped.push(b.clone());
+  }
+
+  // Step 1b: Continuous Liang-Barsky OBB intersection wrapping for crossbars, legs, partitions,
+  // stand bases, and peer items so chords never cut diagonally across opposite faces of an obstacle.
+  const boxWrapped: Vector3[] = [wrapped[0].clone()];
+  for (let i = 1; i < wrapped.length; i++) {
+    const a = boxWrapped[boxWrapped.length - 1];
+    const b = wrapped[i];
+    const isEndStub = i === 1 || i === wrapped.length - 1;
+    let detoured = false;
+    if (!isEndStub && a.distanceToSquared(b) > 1e-6) {
+      for (const box of solids) {
+        if (box.kind === 'desk' || box.kind === 'shelf' || box.kind === 'wall') continue;
+        if (isAllowedSolidForCable(box, allowedItemIds)) continue;
+        const c = Math.cos(box.yaw);
+        const sn = Math.sin(box.yaw);
+        const toLocal = (p: Vector3): [number, number, number] => {
+          const dx = p.x - box.cx;
+          const dz = p.z - box.cz;
+          return [dx * c - dz * sn, p.y, dx * sn + dz * c];
+        };
+        const toWorld = (lx: number, ly: number, lz: number) =>
+          new Vector3(box.cx + lx * c + lz * sn, ly, box.cz - lx * sn + lz * c);
+
+        const [ax, ay, az] = toLocal(a);
+        const [bx, by, bz] = toLocal(b);
+        const ex = box.halfW + padRadius + 0.002;
+        const ez = box.halfD + padRadius + 0.002;
+        const eyMin = box.minY - padRadius - 0.002;
+        const eyMax = box.maxY + padRadius + 0.002;
+
+        let tMin = 0;
+        let tMax = 1;
+        const clipAxis = (p0: number, p1: number, minB: number, maxB: number): boolean => {
+          const d = p1 - p0;
+          if (Math.abs(d) < 1e-8) return p0 >= minB && p0 <= maxB;
+          let t0 = (minB - p0) / d;
+          let t1 = (maxB - p0) / d;
+          if (t0 > t1) [t0, t1] = [t1, t0];
+          tMin = Math.max(tMin, t0);
+          tMax = Math.min(tMax, t1);
+          return tMin <= tMax;
+        };
+
+        if (
+          !clipAxis(ax, bx, -ex, ex) ||
+          !clipAxis(ay, by, eyMin, eyMax) ||
+          !clipAxis(az, bz, -ez, ez)
+        ) {
+          continue;
+        }
+        if (tMax - tMin <= 0.002 || tMax <= 0.005 || tMin >= 0.995) continue;
+
+        const tMid = (tMin + tMax) * 0.5;
+        const midWorld = new Vector3().lerpVectors(a, b, tMid);
+        if (findContainingHole(midWorld, radius, holes)) continue;
+
+        adjusted = true;
+        detoured = true;
+        const mLx = ax + (bx - ax) * tMid;
+        const mLz = az + (bz - az) * tMid;
+
+        if (box.id.startsWith('desk-stretcher-')) {
+          const underY = box.minY - padRadius - 0.006;
+          const e1x = ax + (bx - ax) * tMin;
+          const e2x = ax + (bx - ax) * tMax;
+          const e1z = az + (bz - az) * tMin;
+          const e2z = az + (bz - az) * tMax;
+          const sideA = az >= 0 ? ez + 0.005 : -(ez + 0.005);
+          const sideB = bz >= 0 ? ez + 0.005 : -(ez + 0.005);
+          if (ay > underY) {
+            boxWrapped.push(toWorld(e1x, Math.min(ay, underY), Math.abs(e1z) < ez ? sideA : e1z));
+          } else {
+            boxWrapped.push(toWorld(e1x, underY, e1z));
+          }
+          if (by > underY) {
+            boxWrapped.push(toWorld(e2x, Math.min(by, underY), Math.abs(e2z) < ez ? sideB : e2z));
+          } else {
+            boxWrapped.push(toWorld(e2x, underY, e2z));
+          }
+        } else if (box.id.endsWith(':base')) {
+          const overY = box.maxY + padRadius + 0.004;
+          const e1x = ax + (bx - ax) * tMin;
+          const e1z = az + (bz - az) * tMin;
+          const e2x = ax + (bx - ax) * tMax;
+          const e2z = az + (bz - az) * tMax;
+          boxWrapped.push(toWorld(e1x, overY, e1z), toWorld(e2x, overY, e2z));
+        } else {
+          const penX = ex - Math.abs(mLx);
+          const penZ = ez - Math.abs(mLz);
+          const e1x = ax + (bx - ax) * tMin;
+          const e1y = ay + (by - ay) * tMin;
+          const e1z = az + (bz - az) * tMin;
+          const e2x = ax + (bx - ax) * tMax;
+          const e2y = ay + (by - ay) * tMax;
+          const e2z = az + (bz - az) * tMax;
+          if (penX < penZ) {
+            const sideX = (mLx >= 0 ? 1 : -1) * (ex + 0.004);
+            boxWrapped.push(toWorld(sideX, e1y, e1z), toWorld(sideX, e2y, e2z));
+          } else {
+            const sideZ = (mLz >= 0 ? 1 : -1) * (ez + 0.004);
+            boxWrapped.push(toWorld(e1x, e1y, sideZ), toWorld(e2x, e2y, sideZ));
+          }
+        }
+        break;
+      }
+    }
+    boxWrapped.push(b.clone());
+  }
+
+  // Step 2: Subdivide any interior span that still grazes a SolidBox corner
+  const out: Vector3[] = [boxWrapped[0].clone()];
+  for (let i = 1; i < boxWrapped.length; i++) {
+    const a = boxWrapped[i - 1];
+    const b = boxWrapped[i];
+    const isEndStub = i === 1 || i === wrapped.length - 1;
+    if (isEndStub) {
+      out.push(b.clone());
+      continue;
+    }
+
+    const dist = a.distanceTo(b);
+    const segs = Math.min(32, Math.max(1, Math.ceil(dist / 0.008)));
+    for (let s = 1; s <= segs; s++) {
+      const sample = new Vector3().lerpVectors(a, b, s / segs);
+      const res = projectCablePointClear(sample, padRadius, solids, holes, allowedItemIds);
+      if (res.adjusted) adjusted = true;
+      if (s === segs || (res.adjusted && out[out.length - 1].distanceTo(res.point) > 0.006)) {
+        out.push(res.point);
+      }
+    }
+  }
+
+  return { points: out, adjusted };
+}
+
+function crossesBoxDiag(
+  ax: number,
+  az: number,
+  bx: number,
+  bz: number,
+  ex: number,
+  ez: number,
+): boolean {
+  for (const t of [0.25, 0.5, 0.75]) {
+    const x = ax + (bx - ax) * t;
+    const z = az + (bz - az) * t;
+    if (Math.abs(x) < ex && Math.abs(z) < ez) return true;
+  }
+  return false;
+}
+
 function isPointInsideSolidBox(
   wx: number,
   wy: number,
@@ -1098,41 +1401,79 @@ export function checkMonitorPoseCollision(
   const tier = monitorBaseTier(item.size, item.monitor);
   const isStudio = item.monitor?.model === 'studioDisplay';
 
+  const basePanelY = parts.standHeight + parts.panelHeight / 2;
   const panelY = pose.pivotY + parts.panelHeight / 2;
   const panelZ = -0.02 + pose.pivotZOffset;
   const halfW = item.size.width / 2;
   const halfH = parts.panelHeight / 2;
 
   const pitchRad = (pose.pitchDeg * Math.PI) / 180;
+  const screenYawRad = (pose.screenYawDeg * Math.PI) / 180;
   const rollRad = (pose.rollDeg * Math.PI) / 180;
   const cosP = Math.cos(pitchRad);
   const sinP = Math.sin(pitchRad);
+  const cosSY = Math.cos(screenYawRad);
+  const sinSY = Math.sin(screenYawRad);
   const cosR = Math.cos(rollRad);
   const sinR = Math.sin(rollRad);
 
-  // 1. Self-collision with stock stand column when tilting pitch excessively
-  if (!mounted) {
-    const lowerSpineMy = panelY - halfH * cosP + 0.008 * sinP;
-    const lowerSpineMz = panelZ - halfH * sinP - 0.008 * cosP;
-    const colRearLimit = isStudio
-      ? -0.088
-      : -0.068 + Math.tan(DELL_COLUMN_LEAN_RAD) * Math.max(0, lowerSpineMy - 0.008) - 0.012;
-    if (lowerSpineMz < colRearLimit) {
-      return '支架立柱';
-    }
-    // Upper tilt into column neck when tilting backward (negative pitch) at low lift
-    const upperSpineMy = panelY + halfH * cosP + 0.014 * sinP;
-    const upperSpineMz = panelZ + halfH * sinP - 0.014 * cosP;
-    const colTopY = pose.pivotY + 0.032;
-    if (upperSpineMy <= colTopY) {
-      const upperColRearLimit = isStudio
-        ? -0.084
-        : -0.068 + Math.tan(DELL_COLUMN_LEAN_RAD) * Math.max(0, upperSpineMy - 0.008) - 0.01;
-      if (upperSpineMz < upperColRearLimit) {
-        return '支架立柱';
+  // Stock stand column / L-arm physical volume bounds in monitor-local coordinates
+  const dellColTopY = basePanelY + MAX_LIFT + 0.022;
+  const dellColHalfW = tier.columnWidth / 2;
+  const isStudioHeight = item.monitor?.standType === 'height';
+  const studioArmBottomZ = -0.025 - tier.baseDepth * 0.34;
+  const studioArmTopZ = -0.044;
+  const studioArmBottomY = 0.004;
+  const studioArmTopY = basePanelY + (isStudioHeight ? STUDIO_MAX_LIFT + 0.016 : 0.01);
+  const studioArmHalfD = isStudioHeight ? 0.0051 : 0.0041;
+
+  const hitsStandColumnOrBase = (mx: number, my: number, mz: number): string | null => {
+    if (mounted) return null;
+    if (!isStudio) {
+      if (my >= 0.008 && my <= dellColTopY + 0.003 && Math.abs(mx) <= dellColHalfW + 0.003) {
+        const colCenterZ = -0.072 + Math.tan(DELL_COLUMN_LEAN_RAD) * (my - 0.008);
+        const colFrontZ = colCenterZ + 0.0105 + 0.002;
+        const colRearZ = colCenterZ - 0.0105 - 0.03;
+        if (mz <= colFrontZ && mz >= colRearZ) {
+          return '支架立柱';
+        }
+      }
+      if (
+        my < 0.011 &&
+        Math.abs(mx) <= tier.baseWidth * 0.45 &&
+        mz <= -0.072 + tier.baseDepth * 0.78 &&
+        mz >= -0.1
+      ) {
+        return '显示器底座';
+      }
+    } else {
+      if (
+        my >= studioArmBottomY &&
+        my <= studioArmTopY + 0.002 &&
+        Math.abs(mx) <= dellColHalfW + 0.003
+      ) {
+        const slideT = Math.max(
+          0,
+          Math.min(1, (my - studioArmBottomY) / Math.max(0.05, studioArmTopY - studioArmBottomY)),
+        );
+        const armCenterZ = studioArmBottomZ + (studioArmTopZ - studioArmBottomZ) * slideT;
+        const armFrontZ = armCenterZ + studioArmHalfD + 0.0008;
+        const armRearZ = armCenterZ - studioArmHalfD - 0.03;
+        if (mz <= armFrontZ && mz >= armRearZ) {
+          return '支架立柱';
+        }
+      }
+      if (
+        my < 0.008 &&
+        Math.abs(mx) <= tier.baseWidth * 0.48 &&
+        mz <= -0.025 + tier.baseDepth * 0.48 &&
+        mz >= -0.025 - tier.baseDepth * 0.48
+      ) {
+        return '显示器底座';
       }
     }
-  }
+    return null;
+  };
 
   const wall = deskBackWallBounds(desk);
   const checkPartitions = !desk.return && desk.partitions && item.surface !== 'floor';
@@ -1175,11 +1516,25 @@ export function checkMonitorPoseCollision(
     }
   }
 
-  // 3. Dense 3D sampling across the articulated screen panel (front bezel & rear housing)
+  // 3. Dense 3D sampling across the articulated screen panel (front bezel & true rear dome/shell)
   const supportLabel = item.surface === 'shelf' ? '等宽层架' : '桌面';
-  const uSteps = [-1, -0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75, 1];
-  const vSteps = [-1, -0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75, 1];
-  const zSteps = [-0.022, 0.012];
+  const uSteps = [
+    -1, -0.82, -0.65, -0.5, -0.35, -0.24, -0.18, -0.12, -0.06, 0, 0.06, 0.12, 0.18, 0.24, 0.35, 0.5,
+    0.65, 0.82, 1,
+  ];
+  const vSteps = [
+    -1, -0.85, -0.7, -0.55, -0.45, -0.35, -0.25, -0.15, -0.05, 0, 0.05, 0.15, 0.25, 0.35, 0.45,
+    0.55, 0.7, 0.85, 1,
+  ];
+  const rearZAt = (px: number, py: number): number => {
+    if (isStudio) return -0.0176;
+    const ux = Math.min(1, Math.abs(px) / Math.max(0.05, halfW));
+    const uy = Math.min(1, Math.abs(py) / Math.max(0.05, halfH));
+    const wx = Math.cos((ux * Math.PI) / 2);
+    const wy = Math.cos((uy * Math.PI) / 2);
+    const dome = 0.0012 - 0.0428 * Math.pow(wx, 0.7) * Math.pow(wy, 0.72);
+    return Math.abs(px) <= 0.06 && Math.abs(py) <= 0.06 ? Math.min(dome, -0.0385) : dome;
+  };
 
   for (const u of uSteps) {
     const px = u * halfW;
@@ -1187,25 +1542,23 @@ export function checkMonitorPoseCollision(
       const py = v * halfH;
       const rx1 = px * cosR - py * sinR;
       const ry1 = px * sinR + py * cosR;
+      const zSteps = [rearZAt(px, py), 0.013];
       for (const pz of zSteps) {
-        const mx = rx1;
-        const my = panelY + ry1 * cosP - pz * sinP;
-        const mz = panelZ + ry1 * sinP + pz * cosP;
+        const y2 = ry1 * cosP - pz * sinP;
+        const z2 = ry1 * sinP + pz * cosP;
+        const mx = rx1 * cosSY + z2 * sinSY;
+        const my = panelY + y2;
+        const mz = panelZ - rx1 * sinSY + z2 * cosSY;
 
         // Support surface (desk / shelf top) anti-clipping
         if (my < 0.001) {
           return supportLabel;
         }
 
-        // Stock stand base collar self-collision
-        if (
-          !mounted &&
-          my < 0.008 &&
-          Math.abs(mx) <= tier.columnWidth * 0.75 &&
-          mz <= -0.058 &&
-          mz >= -0.085
-        ) {
-          return '显示器底座';
+        // Stock stand column & base self-collision
+        const standHit = hitsStandColumnOrBase(mx, my, mz);
+        if (standHit) {
+          return standHit;
         }
 
         const wx = item.x + mx * cosY + mz * sinY;
@@ -1241,10 +1594,14 @@ export function checkMonitorPoseCollision(
     for (const lx of [-lampHalfW, 0, lampHalfW]) {
       const rx1 = lx * cosR - py * sinR;
       const ry1 = lx * sinR + py * cosR;
-      const mx = rx1;
-      const my = panelY + ry1 * cosP - pz * sinP;
-      const mz = panelZ + ry1 * sinP + pz * cosP;
+      const y2 = ry1 * cosP - pz * sinP;
+      const z2 = ry1 * sinP + pz * cosP;
+      const mx = rx1 * cosSY + z2 * sinSY;
+      const my = panelY + y2;
+      const mz = panelZ - rx1 * sinSY + z2 * cosSY;
       if (my < 0.001) return supportLabel;
+      const lampStandHit = hitsStandColumnOrBase(mx, my, mz);
+      if (lampStandHit) return lampStandHit;
       const wx = item.x + mx * cosY + mz * sinY;
       const wy = baseY + my;
       const wz = item.z - mx * sinY + mz * cosY;
@@ -1309,6 +1666,8 @@ export function constrainMonitorPose(
 
   const startPitch = currentItem.pitch ?? 0;
   const endPitch = target.pitch ?? startPitch;
+  const startScreenYaw = currentItem.screenYaw ?? 0;
+  const endScreenYaw = target.screenYaw ?? startScreenYaw;
   const startRoll = currentItem.roll ?? 0;
   const endRoll = target.roll ?? startRoll;
   const startLift = currentItem.lift ?? 0;
@@ -1316,6 +1675,7 @@ export function constrainMonitorPose(
 
   const hasPoseChange =
     Math.abs(dRot) > 1e-4 ||
+    Math.abs(endScreenYaw - startScreenYaw) > 1e-4 ||
     Math.abs(endPitch - startPitch) > 1e-4 ||
     Math.abs(endRoll - startRoll) > 1e-4 ||
     Math.abs(endLift - startLift) > 1e-5;
@@ -1327,6 +1687,11 @@ export function constrainMonitorPose(
   const poseAt = (t: number): SceneItem => ({
     ...target,
     rotation: Math.round((startRot + dRot * t) * 10) / 10,
+    ...(typeof target.screenYaw === 'number' || typeof currentItem.screenYaw === 'number'
+      ? {
+          screenYaw: Math.round((startScreenYaw + (endScreenYaw - startScreenYaw) * t) * 10) / 10,
+        }
+      : {}),
     ...(typeof target.pitch === 'number' || typeof currentItem.pitch === 'number'
       ? { pitch: Math.round((startPitch + (endPitch - startPitch) * t) * 10) / 10 }
       : {}),
@@ -1354,7 +1719,7 @@ export function constrainMonitorPose(
     Math.abs(Math.abs(endRoll) - 90) < 0.5 &&
     Math.abs(endRoll - startRoll) >= 44.5;
 
-  const steps = 16;
+  const steps = 28;
   let lastValidT = 0;
   let firstFailT = 1;
   let hitObstacle: string | undefined;
@@ -1364,7 +1729,10 @@ export function constrainMonitorPose(
     const probe = poseAt(t);
     const hit = checkMonitorPoseCollision(probe, desk, allWithPose(probe));
     if (hit !== null) {
-      if (isDiscretePortraitJump && (hit === '桌面' || hit === '等宽层架')) {
+      if (
+        isDiscretePortraitJump &&
+        (hit === '桌面' || hit === '等宽层架' || hit === '显示器底座')
+      ) {
         continue;
       }
       firstFailT = t;

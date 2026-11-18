@@ -18,6 +18,12 @@ describe('尺寸与放置', () => {
     expect(projectSchema.safeParse(p).success).toBe(true);
     (p.desk as { finish?: string }).finish = 'glossy';
     expect(projectSchema.safeParse(p).success).toBe(false);
+
+    p.desk.finish = 'wood';
+    p.desk.partitions = { back: true, left: true, right: true, height: 0.35, material: 'frosted' };
+    expect(projectSchema.safeParse(p).success).toBe(true);
+    (p.desk.partitions as { material?: string }).material = 'invalid';
+    expect(projectSchema.safeParse(p).success).toBe(false);
   });
   it('旋转后角落越界，即便中心在桌内', () => {
     const p = defaultProject(),
@@ -90,7 +96,7 @@ describe('编辑历史', () => {
     s().updateItem(id, { x: 0.23, z: 0.12 });
     expect(s().past).toHaveLength(1);
     s().undo();
-    expect(s().project.items[0].x).toBe(-0.12);
+    expect(s().project.items[0].x).toBe(-0.16);
   });
   it('无效提交不改变旧场景', () => {
     const s = () => useEditor.getState(),
@@ -145,6 +151,16 @@ describe('编辑历史', () => {
     expect(s().past).toHaveLength(1);
     expect(s().project.items[0].x).toBeCloseTo(0.19);
     s().undo();
-    expect(s().project.items[0].x).toBe(-0.12);
+    expect(s().project.items[0].x).toBe(-0.16);
+  });
+  it('初始场景只保留 27 寸显示器与 MacBook 并默认插好 Type-C 连线', () => {
+    const p = defaultProject();
+    expect(p.items.map((i) => i.kind)).toEqual(['monitor', 'macbook']);
+    expect(p.cables).toHaveLength(1);
+    const cable = p.cables![0];
+    expect(cable.kind).toBe('usbc');
+    expect(cable.fromPlugType).toBe('usbc');
+    expect(cable.toPlugType).toBe('usbc');
+    expect(projectSchema.safeParse(p).success).toBe(true);
   });
 });

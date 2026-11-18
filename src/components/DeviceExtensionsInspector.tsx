@@ -18,6 +18,8 @@ import {
   cableEffectiveLengths,
   cableKindValues,
   cableMeta,
+  formatCableDisplayName,
+  resolveCablePlugEnds,
   type Cable,
   type CableWaypoint,
 } from '../domain/cable';
@@ -1437,6 +1439,9 @@ export function SelectedCableInspectorSection({ onSafe }: { onSafe: (fn: () => v
       </div>
       <p className="field-note" style={{ marginTop: 0 }}>
         {spec.label} · {fromItem?.name ?? '设备'} → {toItem?.name ?? '桌下走线'}
+        {resolved
+          ? ` · 固定 ${cableEffectiveLengths(cable).totalM.toFixed(2)} m / 实走 ${resolved.pathLengthM.toFixed(2)} m`
+          : ''}
         {resolved?.passedHoles.length
           ? ` · 已过孔：${resolved.passedHoles.map((h) => h.label).join(' / ')}`
           : ''}
@@ -1517,26 +1522,40 @@ export function CableConnectionsSection({
     if (customTargetKey.startsWith('dev:')) {
       const [, targetId, targetPortId] = customTargetKey.split(':');
       const targetDev = project.items.find((d) => d.id === targetId);
-      const isOutlet = targetDev?.kind === 'powerStrip' || targetDev?.kind === 'wallOutlet';
-      const defaultPlug =
-        isOutlet && targetPortId.startsWith('slot-')
-          ? kind === 'power'
-            ? 'cn3Pin'
-            : kind === 'usbc'
-              ? 'ganAdapter'
-              : undefined
-          : undefined;
+      const targetPort = targetDev
+        ? devicePorts(targetDev).find((p) => p.id === targetPortId)
+        : undefined;
+      const finalKind =
+        targetPort &&
+        ((effectiveFromPort.kind === 'dp' && targetPort.kind === 'usbc') ||
+          (effectiveFromPort.kind === 'usbc' && targetPort.kind === 'dp'))
+          ? 'dp'
+          : targetPort &&
+              ((effectiveFromPort.kind === 'usba' && targetPort.kind === 'usbc') ||
+                (effectiveFromPort.kind === 'usbc' && targetPort.kind === 'usba'))
+            ? 'usbc'
+            : kind;
+      const finalSpec = cableMeta[finalKind];
+      const plugEnds = resolveCablePlugEnds({
+        fromKind: item.kind,
+        fromPortId: effectiveFromPort.id,
+        fromPortKind: effectiveFromPort.kind,
+        toKind: targetDev?.kind,
+        toPortId: targetPortId,
+        toPortKind: targetPort?.kind,
+        cableKind: finalKind,
+      });
       onSafe(() =>
         addCable({
-          kind,
+          kind: finalKind,
           from: { type: 'device', itemId: item.id, portId: effectiveFromPort.id },
           to: { type: 'device', itemId: targetId, portId: targetPortId },
           routeViaArm: true,
           viaStandSlot: true,
-          color: spec.color,
-          lengthM: spec.defaultLengthM,
+          color: finalSpec.color,
+          lengthM: finalSpec.defaultLengthM,
           lengthIncludesConnectors: true,
-          ...(defaultPlug ? { toPlugType: defaultPlug } : {}),
+          ...plugEnds,
         }),
       );
     } else {
@@ -1571,7 +1590,7 @@ export function CableConnectionsSection({
     }
 
     const isOutletItem = item.kind === 'powerStrip' || item.kind === 'wallOutlet';
-    const isVideoOrData = kind === 'dp' || kind === 'hdmi' || kind === 'usbc';
+    const isVideoOrData = kind === 'dp' || kind === 'hdmi' || kind === 'usbc' || kind === 'usba';
     const isAudioSignal =
       kind === 'aux35' || kind === 'rca' || kind === 'optical' || kind === 'trs635';
 
@@ -1643,22 +1662,21 @@ export function CableConnectionsSection({
             (isVideoOrData && item.kind !== 'speaker' && p.kind === 'usbc'),
         ))
       : undefined;
-    const spec = cableMeta[kind];
-    const isHostOutlet = hostDevice?.kind === 'powerStrip' || hostDevice?.kind === 'wallOutlet';
-    const defaultToPlug =
-      isHostOutlet && hostPort?.id.startsWith('slot-')
-        ? kind === 'power'
-          ? 'cn3Pin'
-          : kind === 'usbc'
-            ? 'ganAdapter'
-            : undefined
-        : kind === 'power'
-          ? 'cn3Pin'
-          : undefined;
+    const effectiveKind = kind === 'usba' && hostPort?.kind === 'usbc' ? 'usbc' : kind;
+    const spec = cableMeta[effectiveKind];
+    const plugEnds = resolveCablePlugEnds({
+      fromKind: item.kind,
+      fromPortId: sourcePort.id,
+      fromPortKind: sourcePort.kind,
+      toKind: hostDevice?.kind,
+      toPortId: hostPort?.id,
+      toPortKind: hostPort?.kind,
+      cableKind: effectiveKind,
+    });
 
     onSafe(() =>
       addCable({
-        kind,
+        kind: effectiveKind,
         from: { type: 'device', itemId: item.id, portId: sourcePort.id },
         to:
           hostDevice && hostPort
@@ -1668,7 +1686,7 @@ export function CableConnectionsSection({
         color: spec.color,
         lengthM: spec.defaultLengthM,
         lengthIncludesConnectors: true,
-        ...(defaultToPlug ? { toPlugType: defaultToPlug } : {}),
+        ...plugEnds,
       }),
     );
   }
@@ -1750,7 +1768,11 @@ export function CableConnectionsSection({
                         effectiveFromPort.kind === 'magsafe') &&
                         p.kind === 'usbc') ||
                       (effectiveFromPort.kind === 'usbc' &&
-                        (p.kind === 'dp' || p.kind === 'hdmi' || p.kind === 'magsafe')) ||
+                        (p.kind === 'dp' ||
+                          p.kind === 'hdmi' ||
+                          p.kind === 'magsafe' ||
+                          p.kind === 'usba')) ||
+                      (effectiveFromPort.kind === 'usba' && p.kind === 'usbc') ||
                       (effectiveFromPort.kind === 'rca' && p.kind === 'aux35') ||
                       (effectiveFromPort.kind === 'aux35' && p.kind === 'rca') ||
                       (effectiveFromPort.kind === 'magsafe' && p.kind === 'power') ||
@@ -1791,7 +1813,8 @@ export function CableConnectionsSection({
               <div key={cable.id} className="cable-row">
                 <div className="cable-row-top">
                   <strong>
-                    {spec.label} · Ø{(spec.radius * 2000).toFixed(1)}mm
+                    {cable.kind === 'dp' ? formatCableDisplayName(cable) : spec.label} · Ø
+                    {(spec.radius * 2000).toFixed(1)}mm
                   </strong>
                   <button
                     type="button"
@@ -1921,7 +1944,8 @@ export function CableConnectionsSection({
                           .filter(
                             (p) =>
                               p.kind === cable.kind ||
-                              (cable.kind === 'usbc' && p.kind === 'power') ||
+                              (cable.kind === 'usbc' &&
+                                (p.kind === 'usba' || p.kind === 'power')) ||
                               (cable.kind === 'magsafe' && p.kind === 'power'),
                           )
                           .map((p) => (
@@ -1958,7 +1982,7 @@ export function CableConnectionsSection({
                             );
                           }}
                         >
-                          <option value="">默认端头</option>
+                          <option value="">不附带插头（默认纯线端）</option>
                           {plugSpecValues.map((p) => (
                             <option key={p} value={p}>
                               {PLUG_SPEC_META[p].label}

@@ -54,6 +54,9 @@ export const plugSpecValues = [
   'ganAdapter',
   'appleDuckhead',
   'iecC13',
+  'dp',
+  'usbc',
+  'usba',
 ] as const;
 export const plugSpecSchema = z.enum(plugSpecValues);
 export type PlugSpecKind = z.infer<typeof plugSpecSchema>;
@@ -65,9 +68,12 @@ export const PLUG_SPEC_META: Record<
   cn3Pin: { label: '国标三脚插头 (10A)', shortLabel: '国标三插', depthM: 0.024 },
   cn2Pin: { label: '国标两脚扁插头', shortLabel: '国标两插', depthM: 0.021 },
   rightAngle: { label: '90° 超薄直角弯头', shortLabel: '90°弯头', depthM: 0.011 },
-  ganAdapter: { label: '氮化镓 (GaN) 快充头', shortLabel: 'GaN快充头', depthM: 0.048 },
-  appleDuckhead: { label: '苹果官方方形快充头', shortLabel: '苹果方头', depthM: 0.029 },
+  ganAdapter: { label: '氮化镓 (GaN) 快充头（额外配件）', shortLabel: 'GaN快充头', depthM: 0.048 },
+  appleDuckhead: { label: '苹果官方方形快充头（额外配件）', shortLabel: '苹果方头', depthM: 0.029 },
   iecC13: { label: 'IEC C13 品字尾插头', shortLabel: '品字尾', depthM: 0.032 },
+  dp: { label: 'DisplayPort (DP) 接头', shortLabel: 'DP接头', depthM: 0.042 },
+  usbc: { label: 'USB-C / Type-C 接头', shortLabel: 'Type-C接头', depthM: 0.028 },
+  usba: { label: 'USB-A 方口接头', shortLabel: 'USB-A接头', depthM: 0.032 },
 };
 
 export const WALL_OUTLET_DEFAULT_Y = 0.32;
@@ -120,7 +126,7 @@ export function computeWallOutletSize(cfg: WallOutletSettings) {
 export type LocalSocketSlot = {
   id: string;
   label: string;
-  kind: 'power' | 'usbc';
+  kind: 'power' | 'usbc' | 'usba';
   x: number;
   y: number;
   z: number;
@@ -211,11 +217,10 @@ export function computePowerStripSlots(cfg: PowerStripSettings): LocalSocketSlot
   }
 
   for (const usb of computePowerStripUsbPorts(cfg)) {
-    if (usb.type !== 'usbc') continue;
     slots.push({
       id: usb.id,
       label: usb.label,
-      kind: 'usbc',
+      kind: usb.type,
       x: usb.x,
       y: usb.y,
       z: usb.z,
@@ -239,5 +244,13 @@ export function computeWallOutletSlots(cfg: WallOutletSettings): LocalSocketSlot
       y: cfg.mount === 'floor' ? height : height / 2,
       z: cfg.mount === 'floor' ? 0 : depth / 2,
     },
+    ...computeWallOutletUsbPorts(cfg).map((usb) => ({
+      id: usb.id,
+      label: usb.label,
+      kind: usb.type,
+      x: usb.x,
+      y: usb.y,
+      z: usb.z,
+    })),
   ];
 }

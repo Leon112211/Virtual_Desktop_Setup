@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { RoundedBox } from '@react-three/drei';
-import { useThree, type ThreeEvent } from '@react-three/fiber';
+import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import {
   CatmullRomCurve3,
+  Group,
+  Mesh,
+  MeshStandardMaterial,
   Plane,
   Quaternion,
   Raycaster,
@@ -13,17 +16,28 @@ import {
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import {
   arePortKindsCompatible,
+  cableEffectiveLengths,
   cableMeta,
   isPortCompatibleWithCable,
+  plugConnectorLen,
+  resolveCablePlugEnds,
   type Cable,
   type CableWaypoint,
 } from '../domain/cable';
+import {
+  createLiveCableState,
+  finalizeLiveRenderPoints,
+  minCableInteriorAngleDeg,
+  stepLiveCablePhysics,
+  type LiveCableState,
+} from '../domain/cablePhysics';
 import { computeCablePath } from '../domain/cableRouting';
 import {
   findContainingHole,
   getSceneCableHoles,
   getSceneSolidBoxes,
   projectCablePointClear,
+  resolveSegmentClearance,
   type CableHole,
 } from '../domain/collision';
 import { devicePorts, devicePortWorld, isPortKind } from '../domain/ports';
@@ -59,6 +73,8 @@ function PlugConnector({
   const bootR = spec.radius * 1.45;
   const activePowerPlug =
     plugType ?? (kind === 'power' ? 'iecC13' : kind === 'usbc' ? undefined : undefined);
+  const shapeKind =
+    plugType === 'dp' || plugType === 'usbc' || plugType === 'usba' ? plugType : kind;
 
   return (
     <group position={position} quaternion={quat}>
@@ -184,7 +200,7 @@ function PlugConnector({
         </>
       ) : (
         <>
-          {kind === 'dp' && (
+          {shapeKind === 'dp' && (
             <>
               {/* 镀金/镍金属插入端 */}
               <mesh position={[0, 0, 0.002]}>
@@ -242,7 +258,7 @@ function PlugConnector({
             </>
           )}
 
-          {kind === 'usbc' && (
+          {shapeKind === 'usbc' && (
             <>
               <mesh position={[0, 0, 0.0015]}>
                 <boxGeometry args={[0.0084, 0.0026, 0.004]} />
@@ -261,6 +277,34 @@ function PlugConnector({
               <mesh position={[0, 0, 0.024]} rotation={[Math.PI / 2, 0, 0]}>
                 <cylinderGeometry args={[bootR, bootR * 1.28, 0.009, 10]} />
                 <meshStandardMaterial color="#272d37" roughness={0.58} />
+              </mesh>
+            </>
+          )}
+
+          {shapeKind === 'usba' && (
+            <>
+              {/* USB Type-A 冲压镀镍金属舌插（12.0 × 4.5 × 12 mm + 内蓝胶舌） */}
+              <mesh position={[0, 0, 0.0045]}>
+                <boxGeometry args={[0.012, 0.0045, 0.01]} />
+                <meshStandardMaterial color="#cfd5dc" metalness={0.86} roughness={0.24} />
+              </mesh>
+              <mesh position={[0, 0.0005, 0.0048]}>
+                <boxGeometry args={[0.0102, 0.0018, 0.0086]} />
+                <meshStandardMaterial color="#1d4ed8" roughness={0.45} />
+              </mesh>
+              {/* USB-A 绝缘护壳（15.6 × 8.2 × 20 mm） */}
+              <RoundedBox
+                args={[0.0156, 0.0082, 0.02]}
+                radius={0.0022}
+                smoothness={2}
+                position={[0, 0, 0.017]}
+                castShadow
+              >
+                <meshStandardMaterial color="#272e3a" metalness={0.2} roughness={0.46} />
+              </RoundedBox>
+              <mesh position={[0, 0, 0.03]} rotation={[Math.PI / 2, 0, 0]}>
+                <cylinderGeometry args={[bootR, bootR * 1.32, 0.01, 10]} />
+                <meshStandardMaterial color="#1f252e" roughness={0.58} />
               </mesh>
             </>
           )}
@@ -526,6 +570,11 @@ function inferEndpointPlugType(
     if (cableKind === 'usbc') return 'ganAdapter';
     if (cableKind === 'magsafe') return 'appleDuckhead';
   }
+  if ((cableKind === 'dp' || cableKind === 'usbc') && isPortKind(target.kind)) {
+    const portSpec = devicePorts(target).find((p) => p.id === ep.portId);
+    if (portSpec?.kind === 'dp') return 'dp';
+    if (portSpec?.kind === 'usbc') return 'usbc';
+  }
   return undefined;
 }
 
@@ -789,7 +838,7 @@ function CableMesh({
       }
     }
     if (clean.length < 2) return null;
-    const curve = new CatmullRomCurve3(clean, false, 'catmullrom', 0.35);
+    const curve = new CatmullRomCurve3(clean, false, 'centripetal');
     return new TubeGeometry(
       curve,
       Math.max(24, clean.length * 10),
@@ -862,9 +911,435 @@ function CableMesh({
   );
 }
 
+const ZERO_VEC = new Vector3(0, 0, 0);
+
+type PortAnchor = {
+  key: string;
+  itemId: string;
+  portId: string;
+  kind: Cable['kind'];
+  /** World-space position of port face. */
+  portPos: Vector3;
+  /** Unit outward direction from socket face. */
+  portDir: Vector3;
+  /** World-space position of interactive port orb. */
+  pos: Vector3;
+};
+
+function LiveWiringCable({
+  project,
+  holes,
+  hoveredAnchor,
+}: {
+  project: Project;
+  holes: CableHole[];
+  hoveredAnchor: PortAnchor | null;
+}) {
+  const wiringFrom = useEditor((s) => s.wiringFrom);
+  const wiringTo = useEditor((s) => s.wiringTo);
+  const wiringActiveEnd = useEditor((s) => s.wiringActiveEnd);
+  const wiringPreset = useEditor((s) => s.wiringPreset);
+  const { camera, gl, scene, invalidate } = useThree();
+
+  const resolvedKind: Cable['kind'] =
+    wiringPreset?.kind ?? wiringFrom?.kind ?? wiringTo?.kind ?? 'dp';
+  const spec = cableMeta[resolvedKind];
+  const nominalM = wiringPreset?.lengthM ?? spec.defaultLengthM;
+  const cableColor = wiringPreset?.color ?? spec.color;
+  const { bodyM } = cableEffectiveLengths({
+    kind: resolvedKind,
+    lengthM: nominalM,
+    lengthIncludesConnectors: true,
+  });
+
+  // Resolve plug head specs for End A (`from`) & End B (`to`)
+  const connected = wiringFrom ?? wiringTo;
+  const connectedItem = connected
+    ? project.items.find((i) => i.id === connected.itemId)
+    : undefined;
+  const previewEnds = useMemo(() => {
+    if (wiringPreset?.fromPortKind && wiringPreset?.toPortKind) {
+      return {
+        fromPlugType: wiringPreset.devicePlugType,
+        toPlugType: wiringPreset.outletPlugType,
+      };
+    }
+    if (wiringPreset?.devicePlugType || wiringPreset?.outletPlugType) {
+      if (wiringFrom) {
+        const isFromOutlet =
+          connectedItem?.kind === 'powerStrip' || connectedItem?.kind === 'wallOutlet';
+        return {
+          fromPlugType: isFromOutlet ? wiringPreset.outletPlugType : wiringPreset.devicePlugType,
+          toPlugType: isFromOutlet ? wiringPreset.devicePlugType : wiringPreset.outletPlugType,
+        };
+      }
+      if (wiringTo) {
+        const isToOutlet =
+          connectedItem?.kind === 'powerStrip' || connectedItem?.kind === 'wallOutlet';
+        return {
+          fromPlugType: isToOutlet ? wiringPreset.devicePlugType : wiringPreset.outletPlugType,
+          toPlugType: isToOutlet ? wiringPreset.outletPlugType : wiringPreset.devicePlugType,
+        };
+      }
+      return {
+        fromPlugType: wiringPreset.devicePlugType,
+        toPlugType: wiringPreset.outletPlugType,
+      };
+    }
+    if (connectedItem && connected) {
+      if (wiringFrom) {
+        return resolveCablePlugEnds({
+          fromKind: connectedItem.kind,
+          fromPortId: connected.portId,
+          cableKind: resolvedKind,
+        });
+      }
+      const swapped = resolveCablePlugEnds({
+        fromKind: connectedItem.kind,
+        fromPortId: connected.portId,
+        cableKind: resolvedKind,
+      });
+      return {
+        fromPlugType: swapped.toPlugType,
+        toPlugType: swapped.fromPlugType,
+      };
+    }
+    return {};
+  }, [wiringPreset, wiringFrom, wiringTo, connectedItem, connected, resolvedKind]);
+
+  const fromConnLen = plugConnectorLen(resolvedKind, previewEnds.fromPlugType);
+  const toConnLen = plugConnectorLen(resolvedKind, previewEnds.toPlugType);
+  const heldConnLen = wiringActiveEnd === 'from' ? fromConnLen : toConnLen;
+
+  const solids = useMemo(() => getSceneSolidBoxes(project), [project]);
+  const allowedItemIds = useMemo(() => {
+    const s = new Set<string>();
+    if (wiringFrom) s.add(wiringFrom.itemId);
+    if (wiringTo) s.add(wiringTo.itemId);
+    if (hoveredAnchor) s.add(hoveredAnchor.itemId);
+    return s;
+  }, [wiringFrom, wiringTo, hoveredAnchor]);
+
+  const lockedFrom = useMemo(() => {
+    if (!wiringFrom) return undefined;
+    const item = project.items.find((i) => i.id === wiringFrom.itemId);
+    if (!item) return undefined;
+    const w = devicePortWorld(item, wiringFrom.portId, project.desk, project.items);
+    if (!w) return undefined;
+    return {
+      position: w.position.clone().addScaledVector(w.direction, fromConnLen),
+      direction: w.direction.clone(),
+    };
+  }, [wiringFrom, project, fromConnLen]);
+
+  const lockedTo = useMemo(() => {
+    if (!wiringTo) return undefined;
+    const item = project.items.find((i) => i.id === wiringTo.itemId);
+    if (!item) return undefined;
+    const w = devicePortWorld(item, wiringTo.portId, project.desk, project.items);
+    if (!w) return undefined;
+    return {
+      position: w.position.clone().addScaledVector(w.direction, toConnLen),
+      direction: w.direction.clone(),
+    };
+  }, [wiringTo, project, toConnLen]);
+
+  const cursorPosRef = useRef<Vector3>(new Vector3(0, project.desk.height + 0.18, 0.08));
+  const cursorDirRef = useRef<Vector3 | undefined>(undefined);
+  const simRef = useRef<LiveCableState | null>(null);
+  const groupRef = useRef<Group>(null);
+  const meshRef = useRef<Mesh>(null);
+  const matRef = useRef<MeshStandardMaterial>(null);
+  const fromPlugRef = useRef<Group>(null);
+  const toPlugRef = useRef<Group>(null);
+  const cursorRingRef = useRef<Mesh>(null);
+  const activeMoveFramesRef = useRef<number>(12);
+  const raycasterRef = useRef<Raycaster>(new Raycaster());
+  const ndcRef = useRef<Vector2>(new Vector2());
+  const camPlaneRef = useRef<Plane>(new Plane());
+
+  // Initialize or rebuild live simulation when cable kind / length changes
+  useEffect(() => {
+    const anchorPos = lockedFrom?.position ?? lockedTo?.position;
+    simRef.current = createLiveCableState({
+      cursorPos: cursorPosRef.current,
+      bodyM,
+      radius: spec.radius,
+      stiffness: spec.bendingStiffness,
+      minInteriorAngleDeg: spec.minInteriorAngleDeg,
+      activeEnd: wiringActiveEnd,
+      anchorPos,
+    });
+    activeMoveFramesRef.current = 18;
+    invalidate();
+  }, [
+    resolvedKind,
+    bodyM,
+    spec.radius,
+    spec.bendingStiffness,
+    spec.minInteriorAngleDeg,
+    invalidate,
+  ]);
+
+  // Wake simulation smoothly whenever endpoint locking or Space end-switching changes
+  useEffect(() => {
+    activeMoveFramesRef.current = 18;
+    invalidate();
+  }, [wiringFrom, wiringTo, wiringActiveEnd, invalidate]);
+
+  // Snap cursor target to compatible port orb when hovering it
+  useEffect(() => {
+    if (hoveredAnchor) {
+      cursorPosRef.current
+        .copy(hoveredAnchor.portPos)
+        .addScaledVector(hoveredAnchor.portDir, heldConnLen);
+      cursorDirRef.current = hoveredAnchor.portDir.clone();
+      activeMoveFramesRef.current = 10;
+      invalidate();
+    } else {
+      cursorDirRef.current = undefined;
+    }
+  }, [hoveredAnchor, heldConnLen, invalidate]);
+
+  // Track pointer across the canvas to float the held cable end naturally in 3D space
+  useEffect(() => {
+    const dom = gl.domElement;
+    function onPointerMove(ev: PointerEvent) {
+      if (hoveredAnchor) return;
+      const r = dom.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0) return;
+      ndcRef.current.set(
+        ((ev.clientX - r.left) / r.width) * 2 - 1,
+        (-(ev.clientY - r.top) / r.height) * 2 + 1,
+      );
+      const rc = raycasterRef.current;
+      rc.setFromCamera(ndcRef.current, camera);
+
+      const excludeGroup = groupRef.current;
+      const hits = rc.intersectObjects(scene.children, true).filter((h) => {
+        let cur: Group | null = h.object as Group;
+        while (cur) {
+          if (cur === excludeGroup) return false;
+          cur = cur.parent as Group | null;
+        }
+        return true;
+      });
+
+      let target: Vector3 | null = null;
+      if (hits.length > 0 && hits[0].distance < 12) {
+        const hitPt = hits[0].point.clone();
+        const towardCam = rc.ray.direction.clone().multiplyScalar(-0.045);
+        target = hitPt.add(towardCam);
+        target.y = Math.max(spec.radius + 0.03, target.y);
+      } else {
+        const planeY = new Plane(new Vector3(0, 1, 0), -(project.desk.height + 0.16));
+        const out = new Vector3();
+        if (rc.ray.intersectPlane(planeY, out) && out.length() < 5) {
+          target = out;
+        } else {
+          const camFwd = new Vector3();
+          camera.getWorldDirection(camFwd);
+          camPlaneRef.current.setFromNormalAndCoplanarPoint(camFwd, cursorPosRef.current);
+          if (rc.ray.intersectPlane(camPlaneRef.current, out)) {
+            target = out;
+          }
+        }
+      }
+
+      if (target) {
+        target.x = Math.max(
+          -project.desk.width * 1.1,
+          Math.min(project.desk.width * 1.1, target.x),
+        );
+        target.y = Math.max(spec.radius + 0.025, Math.min(2.1, target.y));
+        target.z = Math.max(
+          -project.desk.depth * 1.2,
+          Math.min(project.desk.depth * 1.1, target.z),
+        );
+        cursorPosRef.current.copy(target);
+        activeMoveFramesRef.current = 12;
+        invalidate();
+      }
+    }
+
+    dom.addEventListener('pointermove', onPointerMove);
+    return () => dom.removeEventListener('pointermove', onPointerMove);
+  }, [gl, camera, scene, hoveredAnchor, project.desk, spec.radius, invalidate]);
+
+  // Ensure live preview tube, plugs, and cursor ring never intercept clicks aimed at 3D port orbs
+  useEffect(() => {
+    const grp = groupRef.current;
+    if (!grp) return;
+    const noopRaycast = () => {};
+    grp.traverse((obj) => {
+      if ('isMesh' in obj && (obj as Mesh).isMesh) {
+        (obj as Mesh).raycast = noopRaycast;
+      }
+    });
+  }, [resolvedKind, previewEnds.fromPlugType, previewEnds.toPlugType]);
+
+  // Dispose latest dynamic TubeGeometry cleanly on unmount
+  useEffect(() => {
+    return () => {
+      meshRef.current?.geometry?.dispose();
+    };
+  }, []);
+
+  useFrame((_, delta) => {
+    const sim = simRef.current;
+    const mesh = meshRef.current;
+    if (!sim || !mesh) return;
+
+    const { maxDisp, shortfallM } = stepLiveCablePhysics(
+      sim,
+      {
+        cursorPos: cursorPosRef.current,
+        cursorDir: cursorDirRef.current,
+        activeEnd: wiringActiveEnd,
+        lockedFrom,
+        lockedTo,
+        solids,
+        holes,
+        allowedItemIds,
+      },
+      delta,
+    );
+
+    useEditor.getState().setWiringShortfallM(shortfallM);
+
+    const sweptRender = resolveSegmentClearance(
+      sim.nodes,
+      spec.radius,
+      solids,
+      holes,
+      allowedItemIds,
+    );
+    const rootFromStart = lockedFrom ? true : lockedTo ? false : wiringActiveEnd === 'from';
+    const renderPoints =
+      lockedFrom && lockedTo
+        ? sweptRender.points
+        : finalizeLiveRenderPoints(
+            sweptRender.points,
+            rootFromStart,
+            sim.bodyM,
+            spec.minInteriorAngleDeg,
+            spec.bendingStiffness,
+            solids,
+            holes,
+            allowedItemIds,
+          );
+    const curve = new CatmullRomCurve3(renderPoints, false, 'centripetal');
+    const nextGeo = new TubeGeometry(
+      curve,
+      Math.max(28, renderPoints.length * 2),
+      spec.radius,
+      8,
+      false,
+    );
+    const prevGeo = mesh.geometry;
+    mesh.geometry = nextGeo;
+    if (prevGeo) prevGeo.dispose();
+
+    mesh.userData.liveNodes = renderPoints.map((v) => ({ x: v.x, y: v.y, z: v.z }));
+    mesh.userData.minAngleDeg = minCableInteriorAngleDeg(renderPoints);
+    mesh.userData.activeEnd = wiringActiveEnd;
+
+    if (matRef.current) {
+      if (shortfallM > 0.01) {
+        matRef.current.emissive.set('#f59e0b');
+        matRef.current.emissiveIntensity = 0.72;
+      } else {
+        matRef.current.emissive.set('#0ea5e9');
+        matRef.current.emissiveIntensity = 0.24;
+      }
+    }
+
+    const rn = renderPoints.length;
+    if (fromPlugRef.current && rn >= 2) {
+      const dirFrom = new Vector3().subVectors(renderPoints[1], renderPoints[0]);
+      if (dirFrom.lengthSq() > 1e-8) {
+        dirFrom.normalize();
+        fromPlugRef.current.position.copy(renderPoints[0]).addScaledVector(dirFrom, -fromConnLen);
+        fromPlugRef.current.quaternion.setFromUnitVectors(FORWARD, dirFrom);
+      }
+    }
+    if (toPlugRef.current && rn >= 2) {
+      const dirTo = new Vector3().subVectors(renderPoints[rn - 2], renderPoints[rn - 1]);
+      if (dirTo.lengthSq() > 1e-8) {
+        dirTo.normalize();
+        toPlugRef.current.position.copy(renderPoints[rn - 1]).addScaledVector(dirTo, -toConnLen);
+        toPlugRef.current.quaternion.setFromUnitVectors(FORWARD, dirTo);
+      }
+    }
+    if (cursorRingRef.current && rn >= 2) {
+      const isFromActive = wiringActiveEnd === 'from';
+      const tip = isFromActive ? renderPoints[0] : renderPoints[rn - 1];
+      const next = isFromActive ? renderPoints[1] : renderPoints[rn - 2];
+      const tang = new Vector3().subVectors(next, tip);
+      if (tang.lengthSq() > 1e-8) {
+        tang.normalize();
+        cursorRingRef.current.position.copy(tip);
+        cursorRingRef.current.quaternion.setFromUnitVectors(FORWARD, tang);
+      } else {
+        cursorRingRef.current.position.copy(tip);
+      }
+    }
+
+    if (activeMoveFramesRef.current > 0) activeMoveFramesRef.current -= 1;
+    if (maxDisp > 0.0008 || activeMoveFramesRef.current > 0) {
+      invalidate();
+    }
+  });
+
+  return (
+    <group ref={groupRef} name="live-wiring-cable">
+      <mesh ref={meshRef} castShadow receiveShadow name="live-wiring-cable-tube">
+        <bufferGeometry />
+        <meshStandardMaterial
+          ref={matRef}
+          color={cableColor}
+          emissive="#0ea5e9"
+          emissiveIntensity={0.24}
+          roughness={resolvedKind === 'magsafe' ? 0.84 : 0.58}
+          metalness={resolvedKind === 'magsafe' ? 0.04 : 0.12}
+        />
+      </mesh>
+      <group ref={fromPlugRef} name="live-wiring-plug-from">
+        <PlugConnector
+          position={ZERO_VEC}
+          direction={FORWARD}
+          kind={resolvedKind}
+          plugType={previewEnds.fromPlugType}
+          cableColor={cableColor}
+        />
+      </group>
+      <group ref={toPlugRef} name="live-wiring-plug-to">
+        <PlugConnector
+          position={ZERO_VEC}
+          direction={FORWARD}
+          kind={resolvedKind}
+          plugType={previewEnds.toPlugType}
+          cableColor={cableColor}
+        />
+      </group>
+      <mesh ref={cursorRingRef} name="live-wiring-cursor-ring">
+        <torusGeometry args={[Math.max(0.012, spec.radius * 2.6), 0.0024, 8, 22]} />
+        <meshStandardMaterial
+          color={wiringActiveEnd === 'from' ? '#38bdf8' : '#f59e0b'}
+          emissive={wiringActiveEnd === 'from' ? '#0284c7' : '#d97706'}
+          emissiveIntensity={1.15}
+          transparent
+          opacity={0.9}
+        />
+      </mesh>
+    </group>
+  );
+}
+
 function PortWiringOverlay({ project, holes }: { project: Project; holes: CableHole[] }) {
   const wiringMode = useEditor((s) => s.wiringMode);
   const wiringDraft = useEditor((s) => s.wiringDraft);
+  const wiringActiveEnd = useEditor((s) => s.wiringActiveEnd);
   const wiringPreset = useEditor((s) => s.wiringPreset);
   const selectedCableId = useEditor((s) => s.selectedCableId);
   const { gl } = useThree();
@@ -872,13 +1347,7 @@ function PortWiringOverlay({ project, holes }: { project: Project; holes: CableH
 
   const anchors = useMemo(() => {
     if (!wiringMode) return [];
-    const list: {
-      key: string;
-      itemId: string;
-      portId: string;
-      kind: Cable['kind'];
-      pos: Vector3;
-    }[] = [];
+    const list: PortAnchor[] = [];
     for (const item of project.items) {
       if (!isPortKind(item.kind)) continue;
       for (const p of devicePorts(item)) {
@@ -889,6 +1358,8 @@ function PortWiringOverlay({ project, holes }: { project: Project; holes: CableH
           itemId: item.id,
           portId: p.id,
           kind: p.kind,
+          portPos: w.position.clone(),
+          portDir: w.direction.clone(),
           pos: w.position.clone().addScaledVector(w.direction, 0.018),
         });
       }
@@ -896,10 +1367,20 @@ function PortWiringOverlay({ project, holes }: { project: Project; holes: CableH
     return list;
   }, [wiringMode, project]);
 
+  const hoveredAnchor = useMemo(
+    () => (hoveredPortKey ? (anchors.find((a) => a.key === hoveredPortKey) ?? null) : null),
+    [anchors, hoveredPortKey],
+  );
+
   if (!wiringMode && !selectedCableId) return null;
 
   return (
     <group>
+      {/* Interactive fixed-length cable hanging from cursor with gravity & bending resilience */}
+      {wiringMode && (
+        <LiveWiringCable project={project} holes={holes} hoveredAnchor={hoveredAnchor} />
+      )}
+
       {/* Visual ring markers on physical pass-through holes (grommet & monitor stand slots) */}
       {holes.map((h) => (
         <mesh
@@ -921,11 +1402,23 @@ function PortWiringOverlay({ project, holes }: { project: Project; holes: CableH
       {/* Clickable 3D port orbs for point-to-point manual wiring */}
       {anchors.map((a) => {
         const isSource = wiringDraft?.itemId === a.itemId && wiringDraft?.portId === a.portId;
-        const matchesPreset = !wiringPreset || isPortCompatibleWithCable(a.kind, wiringPreset.kind);
+        const hasExplicitEnds = Boolean(wiringPreset?.fromPortKind && wiringPreset?.toPortKind);
+        const heldKind = hasExplicitEnds
+          ? wiringActiveEnd === 'from'
+            ? wiringPreset!.fromPortKind!
+            : wiringPreset!.toPortKind!
+          : undefined;
+        const matchesPreset = hasExplicitEnds
+          ? a.kind === heldKind
+          : !wiringPreset || isPortCompatibleWithCable(a.kind, wiringPreset.kind);
         const isCompatible = wiringDraft
           ? wiringDraft.itemId !== a.itemId &&
-            matchesPreset &&
-            arePortKindsCompatible(wiringDraft.kind, a.kind)
+            (hasExplicitEnds
+              ? a.kind ===
+                (wiringDraft.kind === wiringPreset!.fromPortKind
+                  ? wiringPreset!.toPortKind
+                  : wiringPreset!.fromPortKind)
+              : matchesPreset && arePortKindsCompatible(wiringDraft.kind, a.kind))
           : matchesPreset;
         const hovered = hoveredPortKey === a.key;
         return (
@@ -934,13 +1427,13 @@ function PortWiringOverlay({ project, holes }: { project: Project; holes: CableH
             position={a.pos}
             onPointerDown={(e) => {
               e.stopPropagation();
-              if (!isCompatible) return;
+              if (!isCompatible && !isSource) return;
               useEditor.getState().pickWiringPort(a.itemId, a.portId, a.kind);
             }}
             onPointerOver={(e) => {
               e.stopPropagation();
-              setHoveredPortKey(a.key);
-              gl.domElement.style.cursor = isCompatible ? 'pointer' : 'not-allowed';
+              if (isCompatible) setHoveredPortKey(a.key);
+              gl.domElement.style.cursor = isCompatible || isSource ? 'pointer' : 'not-allowed';
             }}
             onPointerOut={() => {
               setHoveredPortKey(null);
@@ -953,7 +1446,7 @@ function PortWiringOverlay({ project, holes }: { project: Project; holes: CableH
               emissive={isSource ? '#f59e0b' : isCompatible ? '#16a34a' : '#334155'}
               emissiveIntensity={hovered || isSource ? 1.2 : 0.8}
               transparent
-              opacity={isCompatible ? 0.95 : 0.35}
+              opacity={isCompatible || isSource ? 0.95 : 0.35}
             />
           </mesh>
         );

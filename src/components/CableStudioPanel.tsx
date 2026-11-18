@@ -4,10 +4,11 @@ import {
   arePortKindsCompatible,
   cableEffectiveLengths,
   cableMeta,
+  formatCableDisplayName,
   isPortCompatibleWithCable,
   POWER_CABLE_PRESETS,
   resolveCablePlugEnds,
-  SIGNAL_CABLE_KINDS,
+  SIGNAL_CABLE_PRESETS,
 } from '../domain/cable';
 import { computeCablePath } from '../domain/cableRouting';
 import { devicePorts, isPortKind, type CableKind } from '../domain/ports';
@@ -16,7 +17,7 @@ import { editorErrorMessage } from '../domain/screenLamp';
 import { useEditor, type WiringPreset } from '../store/editorStore';
 
 type ActiveSelection =
-  { type: 'powerPreset'; presetId: string } | { type: 'signalKind'; kind: CableKind };
+  { type: 'powerPreset'; presetId: string } | { type: 'signalPreset'; presetId: string };
 
 export function CableStudioPanel({ onError }: { onError: (m: string) => void }) {
   const {
@@ -25,6 +26,7 @@ export function CableStudioPanel({ onError }: { onError: (m: string) => void }) 
     wiringMode,
     wiringDraft,
     setWiringMode,
+    updateWiringPreset,
     addCable,
     removeCable,
     selectCable,
@@ -36,6 +38,9 @@ export function CableStudioPanel({ onError }: { onError: (m: string) => void }) 
     presetId: POWER_CABLE_PRESETS[0].id,
   });
   const [customLengthM, setCustomLengthM] = useState<number>(POWER_CABLE_PRESETS[0].lengthM);
+  const [extraPlugAccessory, setExtraPlugAccessory] = useState<'' | 'ganAdapter' | 'appleDuckhead'>(
+    '',
+  );
   const [fromKey, setFromKey] = useState<string>('');
   const [toKey, setToKey] = useState<string>('floor:auto');
 
@@ -43,24 +48,33 @@ export function CableStudioPanel({ onError }: { onError: (m: string) => void }) 
     selection.type === 'powerPreset'
       ? (POWER_CABLE_PRESETS.find((p) => p.id === selection.presetId) ?? POWER_CABLE_PRESETS[0])
       : null;
-  const activeKind: CableKind =
-    selection.type === 'signalKind' ? selection.kind : activePowerPreset!.kind;
+  const activeSignalPreset =
+    selection.type === 'signalPreset'
+      ? (SIGNAL_CABLE_PRESETS.find((p) => p.id === selection.presetId) ?? SIGNAL_CABLE_PRESETS[0])
+      : null;
+  const activeKind: CableKind = activeSignalPreset
+    ? activeSignalPreset.kind
+    : activePowerPreset!.kind;
+  const activePortSpec = activeSignalPreset ?? activePowerPreset;
   const activeSpec = cableMeta[activeKind];
-  const activeLabel = activePowerPreset ? activePowerPreset.name : activeSpec.label;
-  const activeColor = activePowerPreset ? activePowerPreset.color : activeSpec.color;
+  const activeLabel = activePowerPreset ? activePowerPreset.name : activeSignalPreset!.label;
+  const activeColor = activePowerPreset ? activePowerPreset.color : activeSignalPreset!.color;
 
   function choosePowerPreset(presetId: string) {
     const preset = POWER_CABLE_PRESETS.find((p) => p.id === presetId);
     if (!preset) return;
     setSelection({ type: 'powerPreset', presetId });
     setCustomLengthM(preset.lengthM);
+    setExtraPlugAccessory('');
     setFromKey('');
     setToKey('floor:auto');
     if (wiringMode) {
-      setWiringMode(true, {
+      updateWiringPreset({
         kind: preset.kind,
         color: preset.color,
         lengthM: preset.lengthM,
+        fromPortKind: preset.fromPortKind,
+        toPortKind: preset.toPortKind,
         outletPlugType: preset.outletPlugType,
         devicePlugType: preset.devicePlugType,
         label: preset.name,
@@ -68,32 +82,54 @@ export function CableStudioPanel({ onError }: { onError: (m: string) => void }) 
     }
   }
 
-  function chooseSignalKind(kind: CableKind) {
-    const spec = cableMeta[kind];
-    setSelection({ type: 'signalKind', kind });
+  function chooseSignalPreset(presetId: string) {
+    const preset = SIGNAL_CABLE_PRESETS.find((p) => p.id === presetId);
+    if (!preset) return;
+    const spec = cableMeta[preset.kind];
+    setSelection({ type: 'signalPreset', presetId: preset.id });
     setCustomLengthM(spec.defaultLengthM);
+    setExtraPlugAccessory('');
     setFromKey('');
     setToKey('floor:auto');
     if (wiringMode) {
-      setWiringMode(true, {
-        kind,
-        color: spec.color,
+      updateWiringPreset({
+        kind: preset.kind,
+        color: preset.color,
         lengthM: spec.defaultLengthM,
-        label: spec.label,
+        fromPortKind: preset.fromPortKind,
+        toPortKind: preset.toPortKind,
+        devicePlugType: preset.fromPlugType,
+        outletPlugType: preset.toPlugType,
+        label: preset.label,
       });
     }
   }
+
+  const activeExtraPlug =
+    activeKind === 'usbc' || activeKind === 'magsafe' ? extraPlugAccessory || undefined : undefined;
 
   const currentWiringPreset: WiringPreset = useMemo(
     () => ({
       kind: activeKind,
       color: activeColor,
       lengthM: customLengthM,
-      outletPlugType: activePowerPreset?.outletPlugType,
-      devicePlugType: activePowerPreset?.devicePlugType,
+      outletPlugType:
+        activeExtraPlug ?? activePowerPreset?.outletPlugType ?? activeSignalPreset?.toPlugType,
+      devicePlugType: activePowerPreset?.devicePlugType ?? activeSignalPreset?.fromPlugType,
+      fromPortKind: activePortSpec?.fromPortKind,
+      toPortKind: activePortSpec?.toPortKind,
       label: activeLabel,
     }),
-    [activeKind, activeColor, customLengthM, activePowerPreset, activeLabel],
+    [
+      activeKind,
+      activeColor,
+      customLengthM,
+      activeExtraPlug,
+      activePowerPreset,
+      activeSignalPreset,
+      activePortSpec,
+      activeLabel,
+    ],
   );
 
   // All compatible source device ports currently present in the scene
@@ -109,7 +145,11 @@ export function CableStudioPanel({ onError }: { onError: (m: string) => void }) 
     for (const item of project.items) {
       if (!isPortKind(item.kind)) continue;
       for (const p of devicePorts(item)) {
-        if (isPortCompatibleWithCable(p.kind, activeKind)) {
+        const matchesPreset =
+          activePortSpec?.fromPortKind && activePortSpec?.toPortKind
+            ? p.kind === activePortSpec.fromPortKind || p.kind === activePortSpec.toPortKind
+            : isPortCompatibleWithCable(p.kind, activeKind);
+        if (matchesPreset) {
           out.push({
             key: `${item.id}:${p.id}`,
             itemId: item.id,
@@ -122,7 +162,7 @@ export function CableStudioPanel({ onError }: { onError: (m: string) => void }) 
       }
     }
     return out;
-  }, [project.items, activeKind]);
+  }, [project.items, activeKind, activePortSpec]);
 
   const effectiveSource =
     compatibleSources.find((s) => s.key === fromKey) ?? compatibleSources[0] ?? null;
@@ -136,26 +176,39 @@ export function CableStudioPanel({ onError }: { onError: (m: string) => void }) 
       itemName: string;
       portId: string;
       portLabel: string;
+      kind: CableKind;
     }[] = [];
     for (const item of project.items) {
       if (item.id === effectiveSource.itemId || !isPortKind(item.kind)) continue;
       for (const p of devicePorts(item)) {
-        if (
-          isPortCompatibleWithCable(p.kind, activeKind) &&
-          arePortKindsCompatible(effectiveSource.kind, p.kind)
-        ) {
+        let compat = false;
+        if (activePortSpec?.fromPortKind && activePortSpec?.toPortKind) {
+          const expectedTarget =
+            effectiveSource.kind === activePortSpec.fromPortKind
+              ? activePortSpec.toPortKind
+              : activePortSpec.fromPortKind;
+          compat =
+            p.kind === expectedTarget ||
+            Boolean(activeExtraPlug && p.kind === 'power' && p.id.startsWith('slot-'));
+        } else {
+          compat =
+            isPortCompatibleWithCable(p.kind, activeKind) &&
+            arePortKindsCompatible(effectiveSource.kind, p.kind);
+        }
+        if (compat) {
           out.push({
             key: `dev:${item.id}:${p.id}`,
             itemId: item.id,
             itemName: item.name,
             portId: p.id,
             portLabel: p.label,
+            kind: p.kind,
           });
         }
       }
     }
     return out;
-  }, [project.items, effectiveSource, activeKind]);
+  }, [project.items, effectiveSource, activeKind, activePortSpec, activeExtraPlug]);
 
   function handleConnect() {
     if (!effectiveSource) {
@@ -164,17 +217,23 @@ export function CableStudioPanel({ onError }: { onError: (m: string) => void }) 
     }
     try {
       const fromItem = project.items.find((i) => i.id === effectiveSource.itemId);
+      const outletPlug =
+        activeExtraPlug ?? activePowerPreset?.outletPlugType ?? activeSignalPreset?.toPlugType;
+      const devicePlug = activePowerPreset?.devicePlugType ?? activeSignalPreset?.fromPlugType;
       if (toKey.startsWith('dev:')) {
         const [, targetId, targetPortId] = toKey.split(':');
         const toItem = project.items.find((i) => i.id === targetId);
+        const targetPort = compatibleTargets.find((t) => t.key === toKey);
         const plugEnds = resolveCablePlugEnds({
           fromKind: fromItem?.kind,
           fromPortId: effectiveSource.portId,
+          fromPortKind: effectiveSource.kind,
           toKind: toItem?.kind,
           toPortId: targetPortId,
+          toPortKind: targetPort?.kind,
           cableKind: activeKind,
-          outletPlugType: activePowerPreset?.outletPlugType,
-          devicePlugType: activePowerPreset?.devicePlugType,
+          outletPlugType: outletPlug,
+          devicePlugType: devicePlug,
         });
         const id = addCable({
           kind: activeKind,
@@ -193,9 +252,10 @@ export function CableStudioPanel({ onError }: { onError: (m: string) => void }) 
         const plugEnds = resolveCablePlugEnds({
           fromKind: fromItem?.kind,
           fromPortId: effectiveSource.portId,
+          fromPortKind: effectiveSource.kind,
           cableKind: activeKind,
-          outletPlugType: activePowerPreset?.outletPlugType,
-          devicePlugType: activePowerPreset?.devicePlugType,
+          outletPlugType: outletPlug,
+          devicePlugType: devicePlug,
         });
         const id = addCable({
           kind: activeKind,
@@ -261,25 +321,25 @@ export function CableStudioPanel({ onError }: { onError: (m: string) => void }) 
           <span>
             <CableIcon size={12} /> 信号与音频线
           </span>
-          <span>{SIGNAL_CABLE_KINDS.length} 类</span>
+          <span>{SIGNAL_CABLE_PRESETS.length} 类</span>
         </div>
         <div className="signal-cable-grid">
-          {SIGNAL_CABLE_KINDS.map((kind) => {
-            const active = selection.type === 'signalKind' && selection.kind === kind;
+          {SIGNAL_CABLE_PRESETS.map((preset) => {
+            const active = selection.type === 'signalPreset' && selection.presetId === preset.id;
             return (
               <button
-                key={kind}
+                key={preset.id}
                 type="button"
                 className={`signal-cable-pill ${active ? 'active' : ''}`}
                 aria-pressed={active}
-                onClick={() => chooseSignalKind(kind)}
+                onClick={() => chooseSignalPreset(preset.id)}
               >
                 <span
                   className="cable-swatch-dot"
-                  style={{ backgroundColor: cableMeta[kind].color }}
+                  style={{ backgroundColor: preset.color }}
                   aria-hidden="true"
                 />
-                <span>{cableMeta[kind].shortLabel}</span>
+                <span>{preset.shortLabel}</span>
               </button>
             );
           })}
@@ -302,7 +362,7 @@ export function CableStudioPanel({ onError }: { onError: (m: string) => void }) 
               onClick={() => {
                 setCustomLengthM(len);
                 if (wiringMode) {
-                  setWiringMode(true, { ...currentWiringPreset, lengthM: len });
+                  updateWiringPreset({ ...currentWiringPreset, lengthM: len });
                 }
               }}
             >
@@ -371,6 +431,30 @@ export function CableStudioPanel({ onError }: { onError: (m: string) => void }) 
             <Plus size={14} />
             <span>确认接线</span>
           </button>
+
+          {(activeKind === 'usbc' || activeKind === 'magsafe') && (
+            <select
+              aria-label="额外插头配件"
+              value={extraPlugAccessory}
+              onChange={(e) => {
+                const next = e.target.value as '' | 'ganAdapter' | 'appleDuckhead';
+                setExtraPlugAccessory(next);
+                if (wiringMode) {
+                  updateWiringPreset({
+                    ...currentWiringPreset,
+                    outletPlugType:
+                      (next || undefined) ??
+                      activePowerPreset?.outletPlugType ??
+                      activeSignalPreset?.toPlugType,
+                  });
+                }
+              }}
+            >
+              <option value="">不附带插头（纯线缆 · 额外配件另选）</option>
+              <option value="ganAdapter">额外配件：氮化镓 (GaN) 快充头</option>
+              <option value="appleDuckhead">额外配件：苹果官方方形快充头</option>
+            </select>
+          )}
         </div>
       </section>
 
@@ -400,10 +484,18 @@ export function CableStudioPanel({ onError }: { onError: (m: string) => void }) 
                 toEp.type === 'device'
                   ? project.items.find((i) => i.id === toEp.itemId)
                   : undefined;
-              const plugBadge =
+              const rawPlugBadge =
                 c.toPlugType || c.fromPlugType
                   ? PLUG_SPEC_META[(c.toPlugType ?? c.fromPlugType)!].shortLabel
                   : null;
+              const plugBadge =
+                (c.kind === 'dp' || c.kind === 'usbc') &&
+                rawPlugBadge &&
+                (rawPlugBadge === 'DP接头' ||
+                  rawPlugBadge === 'Type-C接头' ||
+                  rawPlugBadge === 'USB-A接头')
+                  ? null
+                  : rawPlugBadge;
               const isSelected = selectedCableId === c.id;
               return (
                 <div
@@ -421,7 +513,7 @@ export function CableStudioPanel({ onError }: { onError: (m: string) => void }) 
                         style={{ backgroundColor: c.color }}
                         aria-hidden="true"
                       />
-                      <strong>{spec.shortLabel}</strong>
+                      <strong>{formatCableDisplayName(c)}</strong>
                       {plugBadge && <span className="cable-badge">{plugBadge}</span>}
                       <span className="cable-len-chip">{lengths.nominalM}m</span>
                     </div>

@@ -3,9 +3,11 @@ import {
   arePortKindsCompatible,
   cableEffectiveLengths,
   cableMeta,
+  formatCableDisplayName,
   isPortCompatibleWithCable,
   POWER_CABLE_PRESETS,
   resolveCablePlugEnds,
+  SIGNAL_CABLE_PRESETS,
 } from './cable';
 import {
   computeCablePath,
@@ -198,6 +200,7 @@ describe('笔记本、Mac 主机、支架、显示器支架臂与模拟走线', 
   it('模拟 DP / HDMI / 电源走线：支持穿 60 mm 走线孔与沿支架臂理线，删除设备自动清理线缆', () => {
     const s = () => useEditor.getState();
     s().commit((p) => {
+      delete p.cables;
       p.desk.grommet = { enabled: true, side: 'center', diameter: 0.06 };
     });
 
@@ -333,18 +336,20 @@ describe('笔记本、Mac 主机、支架、显示器支架臂与模拟走线', 
       lengthM: 2,
       lengthIncludesConnectors: true,
     });
-    s().addCable({
-      kind: 'rj45',
-      from: { type: 'device', itemId: studioId, portId: 'rj45' },
-      to: { type: 'floor', drop: 'auto' },
+    // 太短的 0.5 m RJ45 固定线缆无法连接桌面到地面时应直接报错阻止拉伸
+    const tooShortRj = {
+      kind: 'rj45' as const,
+      from: { type: 'device' as const, itemId: studioId, portId: 'rj45' },
+      to: { type: 'floor' as const, drop: 'auto' as const },
       routeViaArm: true,
       color: cableMeta.rj45.color,
-      lengthM: 0.5, // 短于桌面到地面距离，应提示线长不足
+      lengthM: 0.5, // 短于桌面到地面距离，不可被拉伸
       lengthIncludesConnectors: true,
-    });
+    };
+    expect(() => s().addCable(tooShortRj)).toThrow(/线缆长度不足/);
 
     const msPath = computeCablePath(s().project.cables![0], s().project)!;
-    const rjPath = computeCablePath(s().project.cables![1], s().project)!;
+    const rjPath = computeCablePath({ ...tooShortRj, id: 'probe-short-rj' }, s().project)!;
     expect(msPath.shortfallM).toBe(0);
     expect(rjPath.shortfallM).toBeGreaterThan(0.2);
   });
@@ -366,6 +371,7 @@ describe('笔记本、Mac 主机、支架、显示器支架臂与模拟走线', 
     );
 
     const s = () => useEditor.getState();
+    s().add('keyboard');
     const kb = s().project.items.find((i) => i.kind === 'keyboard')!;
     expect(kb.color).toBe(KEYBOARD_THEME_SPECS.white.chassisHex);
     expect(resolveKeyboardTheme('#181a20')).toBe('black');
@@ -476,6 +482,7 @@ describe('笔记本、Mac 主机、支架、显示器支架臂与模拟走线', 
 
   it('显示器支架臂支持双臂挂载、倒挂模式、NB FP-2 笔记本托盘与联动删改', () => {
     const s = () => useEditor.getState();
+    s().replace({ ...defaultProject(), cables: [] }, new Map());
 
     // 准备 2 台显示器 + 1 台 MacBook
     const m1 = s().project.items.find((i) => i.kind === 'monitor')!;
@@ -483,8 +490,8 @@ describe('笔记本、Mac 主机、支架、显示器支架臂与模拟走线', 
     s().add('monitor');
     const m2Id = s().selected!;
     s().updateItem(m2Id, { x: 0.3, z: -0.14 });
-    s().add('macbook');
-    const mbId = s().selected!;
+    const existingMb = s().project.items.find((i) => i.kind === 'macbook');
+    const mbId = existingMb ? existingMb.id : (s().add('macbook'), s().selected!);
     s().updateItem(mbId, { x: 0.38, z: 0.04 });
 
     // 1. 先安装主支架臂在 m1，再升级为双臂 + 副臂挂载 m2（两台显示器都应算作臂挂且不越界）
@@ -578,6 +585,7 @@ describe('笔记本、Mac 主机、支架、显示器支架臂与模拟走线', 
     expect(xbox.size).toEqual({ width: 0.153, height: 0.061, depth: 0.102 });
 
     const s = () => useEditor.getState();
+    s().add('controller');
     const ctrl = s().project.items.find((i) => i.kind === 'controller')!;
     expect(ctrl.controller?.model).toBe('ps5');
 
@@ -610,6 +618,13 @@ describe('笔记本、Mac 主机、支架、显示器支架臂与模拟走线', 
     expect(cableMeta.trs635.radius).toBeLessThan(cableMeta.power.radius);
 
     const s = () => useEditor.getState();
+    s().replace({ ...defaultProject(), cables: [] }, new Map());
+    s().add('speaker');
+    const passiveId = s().selected!;
+    s().updateItem(passiveId, { x: -0.56, z: -0.15, speaker: defaultSpeakerSettings('passive') });
+    s().add('speaker');
+    const activeId = s().selected!;
+    s().updateItem(activeId, { x: 0.32, z: -0.14, speaker: defaultSpeakerSettings('active') });
     const speakers = s().project.items.filter((i) => i.kind === 'speaker');
     expect(speakers).toHaveLength(2);
     const passiveLeft = speakers.find((i) => i.speaker?.role === 'passive')!;
@@ -787,5 +802,71 @@ describe('笔记本、Mac 主机、支架、显示器支架臂与模拟走线', 
       outletPlugType: 'ganAdapter',
     });
     expect(directEnds).toEqual({ toPlugType: 'ganAdapter' });
+  });
+
+  it('Type-C 分为双头 Type-C 与 USB ↔ Type-C 且不自动附带充电插头配件', () => {
+    expect(
+      SIGNAL_CABLE_PRESETS.some((p) => p.id === 'usbc-usbc' && p.shortLabel === '双头 Type-C'),
+    ).toBe(true);
+    expect(
+      SIGNAL_CABLE_PRESETS.some((p) => p.id === 'usba-usbc' && p.shortLabel === 'USB ↔ Type-C'),
+    ).toBe(true);
+    for (const preset of POWER_CABLE_PRESETS) {
+      if (preset.kind === 'usbc' || preset.kind === 'magsafe') {
+        expect(preset.outletPlugType).not.toBe('ganAdapter');
+        expect(preset.outletPlugType).not.toBe('appleDuckhead');
+      }
+    }
+
+    // 未指定额外插头配件时，Type-C 连接到插座也不自动附带氮化镓插头
+    const bareTypeC = resolveCablePlugEnds({
+      fromKind: 'macbook',
+      fromPortId: 'usbc1',
+      fromPortKind: 'usbc',
+      toKind: 'powerStrip',
+      toPortId: 'slot-2',
+      toPortKind: 'power',
+      cableKind: 'usbc',
+    });
+    expect(bareTypeC).toEqual({});
+
+    // USB ↔ Type-C 正反两种连接顺序均精确识别 USB-A 端与 Type-C 端
+    const aToC = resolveCablePlugEnds({
+      fromKind: 'monitor',
+      fromPortId: 'usba',
+      fromPortKind: 'usba',
+      toKind: 'macbook',
+      toPortId: 'usbc1',
+      toPortKind: 'usbc',
+      cableKind: 'usbc',
+    });
+    expect(aToC).toEqual({ fromPlugType: 'usba', toPlugType: 'usbc' });
+
+    const cToA = resolveCablePlugEnds({
+      fromKind: 'macbook',
+      fromPortId: 'usbc1',
+      fromPortKind: 'usbc',
+      toKind: 'powerStrip',
+      toPortId: 'usba-1',
+      toPortKind: 'usba',
+      cableKind: 'usbc',
+    });
+    expect(cToA).toEqual({ fromPlugType: 'usbc', toPlugType: 'usba' });
+
+    expect(
+      formatCableDisplayName({
+        kind: 'usbc',
+        fromPlugType: 'usbc',
+        toPlugType: 'usbc',
+      }),
+    ).toBe('双头 Type-C');
+
+    expect(
+      formatCableDisplayName({
+        kind: 'usbc',
+        fromPlugType: 'usba',
+        toPlugType: 'usbc',
+      }),
+    ).toBe('USB ↔ Type-C');
   });
 });

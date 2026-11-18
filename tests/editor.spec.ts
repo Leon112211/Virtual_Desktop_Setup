@@ -2777,6 +2777,93 @@ test('三面一体包边工位挡板无缝连接与桌体集成质感验证', as
   await page
     .locator('canvas')
     .screenshot({ path: testInfo.outputPath('desk-baffle-mounted-shelf.png') });
+  await page.locator('canvas').screenshot({
+    path: 'C:/Users/Leon/.gemini/antigravity/brain/77106729-550e-46ed-bc9d-f21a6207463d/desk-baffle-mounted-shelf.png',
+  });
+
+  // Verify back/side boards match the exact desktop material (wood texture) & shelf has zero support brackets underneath
+  const surfaceMatch = await page.evaluate(async () => {
+    const r3fPath = performance
+      .getEntriesByType('resource')
+      .map((entry) => entry.name)
+      .find((url) => new URL(url).pathname.endsWith('/@react-three_fiber.js'))!;
+    const { _roots } = await import(/* @vite-ignore */ r3fPath);
+    const canvas = document.querySelector('canvas')!;
+    const { scene } = _roots.get(canvas).store.getState();
+    let deskHasMap = false;
+    let partHasMap = false;
+    let deskColor = '';
+    let partColor = '';
+    scene.traverse(
+      (obj: {
+        name?: string;
+        material?: { map?: unknown; color?: { getHexString?: () => string } };
+      }) => {
+        if (obj.name === 'desk-top-mesh' && obj.material) {
+          deskHasMap = Boolean(obj.material.map);
+          deskColor = obj.material.color?.getHexString?.() ?? '';
+        }
+        if (obj.name === 'desk-partitions-mesh' && obj.material) {
+          partHasMap = Boolean(obj.material.map);
+          partColor = obj.material.color?.getHexString?.() ?? '';
+        }
+      },
+    );
+    return { deskHasMap, partHasMap, deskColor, partColor };
+  });
+  expect(surfaceMatch.deskHasMap).toBe(true);
+  expect(surfaceMatch.partHasMap).toBe(true);
+  expect(surfaceMatch.partColor).toBe(surfaceMatch.deskColor);
+
+  // Switch the 3 partition panels to translucent frosted ("透明磨砂") & verify Three.js physical material state
+  await page
+    .getByRole('group', { name: '挡板材质' })
+    .getByRole('button', { name: '透明磨砂', exact: true })
+    .click();
+  const frostedState = await state(page);
+  expect(frostedState.desk.partitions?.material).toBe('frosted');
+  const frostedMat = await page.evaluate(async () => {
+    const r3fPath = performance
+      .getEntriesByType('resource')
+      .map((entry) => entry.name)
+      .find((url) => new URL(url).pathname.endsWith('/@react-three_fiber.js'))!;
+    const { _roots } = await import(/* @vite-ignore */ r3fPath);
+    const canvas = document.querySelector('canvas')!;
+    const { scene } = _roots.get(canvas).store.getState();
+    let info = null as { transparent: boolean; opacity: number; hasMap: boolean } | null;
+    scene.traverse(
+      (obj: {
+        name?: string;
+        material?: { transparent?: boolean; opacity?: number; map?: unknown };
+      }) => {
+        if (obj.name === 'desk-partitions-mesh' && obj.material) {
+          info = {
+            transparent: Boolean(obj.material.transparent),
+            opacity: obj.material.opacity ?? 1,
+            hasMap: Boolean(obj.material.map),
+          };
+        }
+      },
+    );
+    return info as { transparent: boolean; opacity: number; hasMap: boolean } | null;
+  });
+  expect(frostedMat).not.toBeNull();
+  expect(frostedMat!.transparent).toBe(true);
+  expect(frostedMat!.opacity).toBeLessThan(0.7);
+  expect(frostedMat!.hasMap).toBe(false);
+  await page
+    .locator('canvas')
+    .screenshot({ path: testInfo.outputPath('desk-partitions-frosted.png') });
+  await page.locator('canvas').screenshot({
+    path: 'C:/Users/Leon/.gemini/antigravity/brain/77106729-550e-46ed-bc9d-f21a6207463d/desk-partitions-frosted.png',
+  });
+
+  // Switch back to matchDesk before tearing down
+  await page
+    .getByRole('group', { name: '挡板材质' })
+    .getByRole('button', { name: '同桌面材质', exact: true })
+    .click();
+  expect((await state(page)).desk.partitions?.material).toBe('matchDesk');
 
   // Removing all baffles automatically removes shelf; enabling shelf directly auto-enables back baffle
   await page.getByLabel('后挡板', { exact: true }).uncheck();
@@ -4081,6 +4168,981 @@ test('39. 光影与实时阴影精度核验：消除音箱阴影空洞与锯齿�
   await page
     .locator('canvas')
     .screenshot({ path: testInfo.outputPath('lighting-overview-bright.png') });
+
+  expect(errors).toEqual([]);
+});
+
+async function resetToCleanMonitorDesk(page: Page) {
+  await page.getByRole('button', { name: /^场景/ }).click();
+  const rows = page.locator('.scene-row');
+  if ((await rows.count()) > 1) {
+    await rows
+      .filter({ has: page.getByText('MacBook', { exact: true }) })
+      .first()
+      .click();
+    await page.getByRole('button', { name: '删除', exact: true }).click();
+  }
+}
+
+test('40. 线缆物理重力、非锐角韧性与 3D 光标悬垂连线空格切换校验', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+
+  await ready(page);
+  await resetToCleanMonitorDesk(page);
+  await library(page);
+  await page.getByRole('button', { name: '添加智能桌面插排', exact: true }).click();
+
+  await page.locator('.library-tabs button', { hasText: '线缆' }).click();
+  const powerZone = page.getByRole('region', { name: '充电线与电源线专区' });
+  await powerZone.getByRole('button', { name: /国标三插品字电源线/ }).click();
+  await page.getByRole('button', { name: '进入 3D 点选端口接线', exact: true }).click();
+
+  const statusPill = page.getByRole('status');
+  await expect(statusPill).toContainText('手持 A 端');
+
+  // 将鼠标移入画布上方，让 1.8m 电源线实时悬垂在光标上并在重力下弯垂贴合桌面
+  const canvasBox = await page.locator('canvas').boundingBox();
+  expect(canvasBox).toBeTruthy();
+  const cx = canvasBox!.x + canvasBox!.width * 0.45;
+  const cy = canvasBox!.y + canvasBox!.height * 0.25;
+  await page.mouse.move(cx, cy, { steps: 6 });
+  await page.waitForTimeout(380);
+
+  const preMetrics = await page.evaluate(async () => {
+    const r3fPath = performance
+      .getEntriesByType('resource')
+      .map((entry) => entry.name)
+      .find((url) => new URL(url).pathname.endsWith('/@react-three_fiber.js'))!;
+    const { _roots } = await import(/* @vite-ignore */ r3fPath);
+    const canvas = document.querySelector('canvas')!;
+    const { scene } = _roots.get(canvas).store.getState();
+    const tube = scene.getObjectByName('live-wiring-cable-tube') as
+      | {
+          userData?: {
+            liveNodes?: { x: number; y: number; z: number }[];
+            minAngleDeg?: number;
+            activeEnd?: string;
+          };
+        }
+      | undefined;
+    const nodes = tube?.userData?.liveNodes ?? [];
+    const ys = nodes.map((p) => p.y);
+    return {
+      count: nodes.length,
+      minAngleDeg: tube?.userData?.minAngleDeg ?? 0,
+      activeEnd: tube?.userData?.activeEnd,
+      minY: ys.length ? Math.min(...ys) : 99,
+      maxY: ys.length ? Math.max(...ys) : -99,
+    };
+  });
+  expect(preMetrics.count).toBeGreaterThanOrEqual(16);
+  expect(preMetrics.activeEnd).toBe('from');
+  expect(preMetrics.minAngleDeg).toBeGreaterThanOrEqual(92);
+  expect(preMetrics.maxY - preMetrics.minY).toBeGreaterThan(0.15);
+
+  // 按空格切换手持另一端（B 端 ↔ A 端）
+  await page.keyboard.press('Space');
+  await expect(statusPill).toContainText('手持 B 端');
+  await page.waitForTimeout(160);
+  const afterSpace = await page.evaluate(async () => {
+    const r3fPath = performance
+      .getEntriesByType('resource')
+      .map((entry) => entry.name)
+      .find((url) => new URL(url).pathname.endsWith('/@react-three_fiber.js'))!;
+    const { _roots } = await import(/* @vite-ignore */ r3fPath);
+    const { scene } = _roots.get(document.querySelector('canvas')!).store.getState();
+    const tube = scene.getObjectByName('live-wiring-cable-tube');
+    return tube?.userData?.activeEnd;
+  });
+  expect(afterSpace).toBe('to');
+
+  // 切回 A 端并在 3D 场景点击第一个绿色兼容端口（智能桌面插排插孔），应自动切到手持 B 端
+  await page.keyboard.press('Space');
+  await expect(statusPill).toContainText('手持 A 端');
+
+  // 旋转并推进视角，清楚看到插排顶部绿色端口与悬垂线缆
+  await page.evaluate(async () => {
+    const r3fPath = performance
+      .getEntriesByType('resource')
+      .map((entry) => entry.name)
+      .find((url) => new URL(url).pathname.endsWith('/@react-three_fiber.js'))!;
+    const { _roots } = await import(/* @vite-ignore */ r3fPath);
+    const canvas = document.querySelector('canvas')!;
+    const { camera, controls, invalidate } = _roots.get(canvas).store.getState();
+    controls.target.set(0.05, 0.85, -0.05);
+    camera.position.set(0.55, 1.35, 0.72);
+    camera.lookAt(0.05, 0.85, -0.05);
+    controls.update();
+    invalidate();
+    await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+  });
+
+  // 找到所有绿色可用端口球并投影到屏幕坐标点击第 1 个
+  const greenOrbScreen = await page.evaluate(async () => {
+    const r3fPath = performance
+      .getEntriesByType('resource')
+      .map((entry) => entry.name)
+      .find((url) => new URL(url).pathname.endsWith('/@react-three_fiber.js'))!;
+    const { _roots } = await import(/* @vite-ignore */ r3fPath);
+    const canvas = document.querySelector('canvas')!;
+    const rect = canvas.getBoundingClientRect();
+    const { scene, camera } = _roots.get(canvas).store.getState();
+    camera.updateMatrixWorld();
+    const pts: { x: number; y: number }[] = [];
+    scene.traverse((obj: any) => {
+      if (
+        obj.isMesh &&
+        obj.geometry?.type === 'SphereGeometry' &&
+        obj.material?.color?.getHexString?.() === '22c55e'
+      ) {
+        const v = obj.position.clone().project(camera);
+        if (v.z >= -1 && v.z <= 1) {
+          pts.push({
+            x: rect.left + ((v.x + 1) / 2) * rect.width,
+            y: rect.top + ((-v.y + 1) / 2) * rect.height,
+          });
+        }
+      }
+    });
+    return pts;
+  });
+  expect(greenOrbScreen.length).toBeGreaterThanOrEqual(2);
+
+  await page.mouse.click(greenOrbScreen[0].x, greenOrbScreen[0].y);
+  // 接完一端后自动切到另一端（B 端）挂在光标上
+  await expect(statusPill).toContainText('手持 B 端');
+  await page.mouse.move(cx + 80, cy - 30, { steps: 8 });
+  await page.waitForTimeout(350);
+
+  await page.locator('canvas').screenshot({
+    path: 'C:/Users/Leon/.gemini/antigravity/brain/77106729-550e-46ed-bc9d-f21a6207463d/live-wiring-gravity.png',
+  });
+
+  // 找到另一个设备上（不同坐标）的绿色端口完成最终 3D 连线
+  const targetOrbScreen = await page.evaluate(async () => {
+    const r3fPath = performance
+      .getEntriesByType('resource')
+      .map((entry) => entry.name)
+      .find((url) => new URL(url).pathname.endsWith('/@react-three_fiber.js'))!;
+    const { _roots } = await import(/* @vite-ignore */ r3fPath);
+    const canvas = document.querySelector('canvas')!;
+    const rect = canvas.getBoundingClientRect();
+    const { scene, camera } = _roots.get(canvas).store.getState();
+    camera.updateMatrixWorld();
+    const pts: { x: number; y: number }[] = [];
+    scene.traverse((obj: any) => {
+      if (
+        obj.isMesh &&
+        obj.geometry?.type === 'SphereGeometry' &&
+        obj.material?.color?.getHexString?.() === '22c55e'
+      ) {
+        const v = obj.position.clone().project(camera);
+        if (v.z >= -1 && v.z <= 1) {
+          pts.push({
+            x: rect.left + ((v.x + 1) / 2) * rect.width,
+            y: rect.top + ((-v.y + 1) / 2) * rect.height,
+          });
+        }
+      }
+    });
+    return pts;
+  });
+  expect(targetOrbScreen.length).toBeGreaterThanOrEqual(1);
+  await page.mouse.click(targetOrbScreen[0].x, targetOrbScreen[0].y);
+  await expect(statusPill).toBeHidden();
+
+  const finalState = await state(page);
+  expect(finalState.cables?.length).toBe(1);
+  expect(errors).toEqual([]);
+});
+
+test('41. DP 线细分双头 DP 与 DP 转 Type-C 两种类型，端口匹配与 3D 接头切换校验', async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+
+  await ready(page);
+  await resetToCleanMonitorDesk(page);
+  await library(page);
+  await page.getByRole('button', { name: '添加MacBook', exact: true }).click();
+
+  await page.locator('.library-tabs button', { hasText: '线缆' }).click();
+  const signalZone = page.getByRole('region', { name: '信号与音频线缆' });
+  const dualDpBtn = signalZone.getByRole('button', { name: '双头 DP', exact: true });
+  const dpTypeCBtn = signalZone.getByRole('button', { name: 'DP ↔ Type-C', exact: true });
+  await expect(dualDpBtn).toBeVisible();
+  await expect(dpTypeCBtn).toBeVisible();
+
+  // 1. 选择「双头 DP」：起点与终点仅允许 DP 接口，不会混入 Type-C
+  await dualDpBtn.click();
+  const fromSelect = page.getByLabel('左侧起点接口', { exact: true });
+  const toSelect = page.getByLabel('左侧终点接口', { exact: true });
+  await expect(fromSelect.locator('option', { hasText: /Thunderbolt|Type-C|USB-C/ })).toHaveCount(
+    0,
+  );
+  await expect(toSelect.locator('option', { hasText: /MacBook/ })).toHaveCount(0);
+
+  // 2. 选择「DP ↔ Type-C」：连接显示器 DP 与 MacBook Thunderbolt/USB-C，端头分别记录 dp 与 usbc
+  await dpTypeCBtn.click();
+  const monitorDpVal = await fromSelect
+    .locator('option', { hasText: /显示器.*DisplayPort/ })
+    .first()
+    .getAttribute('value');
+  expect(monitorDpVal).toBeTruthy();
+  await fromSelect.selectOption(monitorDpVal!);
+
+  const mbUsbcVal = await toSelect
+    .locator('option', { hasText: /MacBook.*(Thunderbolt|USB-C)/ })
+    .first()
+    .getAttribute('value');
+  expect(mbUsbcVal).toBeTruthy();
+  await toSelect.selectOption(mbUsbcVal!);
+  await page.getByRole('button', { name: '确认接线', exact: true }).click();
+
+  const cur = await state(page);
+  expect(cur.cables?.length).toBe(1);
+  expect(cur.cables?.[0].kind).toBe('dp');
+  expect(cur.cables?.[0].fromPlugType).toBe('dp');
+  expect(cur.cables?.[0].toPlugType).toBe('usbc');
+  await expect(page.locator('.wired-cable-list')).toContainText('DP ↔ Type-C');
+
+  // 3. 进入 3D 连线检查 DP 端 ↔ Type-C 端可通过空格切换且显示对应接头文字
+  await page.getByRole('button', { name: '进入 3D 点选端口接线', exact: true }).click();
+  const statusPill = page.getByRole('status');
+  await expect(statusPill).toContainText('手持 A 端(DP接头)');
+  await page.keyboard.press('Space');
+  await expect(statusPill).toContainText('手持 B 端(Type-C接头)');
+  await page.getByRole('button', { name: '退出 3D 点选端口接线', exact: true }).click();
+
+  expect(errors).toEqual([]);
+});
+
+test('42. 人工拖拽编辑线缆节点后仍受重力落地，无桌板斜穿模及异构 Type-C 接头断缝', async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+
+  await ready(page);
+  await resetToCleanMonitorDesk(page);
+  await library(page);
+  await page.getByRole('button', { name: '添加桌面音响', exact: true }).click();
+  await page.getByRole('button', { name: '添加MacBook', exact: true }).click();
+
+  await page.locator('.library-tabs button', { hasText: '线缆' }).click();
+  const signalZone = page.getByRole('region', { name: '信号与音频线缆' });
+  await signalZone.getByRole('button', { name: 'DP ↔ Type-C', exact: true }).click();
+
+  const fromSelect = page.getByLabel('左侧起点接口', { exact: true });
+  const toSelect = page.getByLabel('左侧终点接口', { exact: true });
+  const monDp = await fromSelect
+    .locator('option', { hasText: /显示器.*DisplayPort/ })
+    .first()
+    .getAttribute('value');
+  await fromSelect.selectOption(monDp!);
+  const mbUsbc = await toSelect
+    .locator('option', { hasText: /MacBook.*(Thunderbolt|USB-C)/ })
+    .first()
+    .getAttribute('value');
+  await toSelect.selectOption(mbUsbc!);
+  await page.getByRole('button', { name: '确认接线', exact: true }).click();
+
+  // 从右后方高角度（与工位连线视角一致）清楚观察显示器背面→音响旁侧→MacBook Type-C 接头整段走线
+  await page.evaluate(async () => {
+    const r3fPath = performance
+      .getEntriesByType('resource')
+      .map((entry) => entry.name)
+      .find((url) => new URL(url).pathname.endsWith('/@react-three_fiber.js'))!;
+    const { _roots } = await import(/* @vite-ignore */ r3fPath);
+    const canvas = document.querySelector('canvas')!;
+    const { camera, controls, invalidate } = _roots.get(canvas).store.getState();
+    controls.target.set(0.18, 0.76, -0.08);
+    camera.position.set(0.88, 1.08, -0.78);
+    camera.lookAt(0.18, 0.76, -0.08);
+    controls.update();
+    invalidate();
+    await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+  });
+
+  await page.locator('canvas').screenshot({
+    path: 'C:/Users/Leon/.gemini/antigravity/brain/77106729-550e-46ed-bc9d-f21a6207463d/cable-straight-around-speaker.png',
+  });
+
+  // 在界面中点击已接线列表选中该 DP↔Type-C 线缆并用右键菜单/节点拖拽方式移动节点后校验
+  await page.locator('.wired-cable-item').first().click();
+  await page.waitForTimeout(200);
+
+  // 从已渲染线缆控制球拖拽一个节点向外侧移动，然后核验渲染曲线无桌面内部穿模点、无空中浮空点
+  const handleScreen = await page.evaluate(async () => {
+    const r3fPath = performance
+      .getEntriesByType('resource')
+      .map((entry) => entry.name)
+      .find((url) => new URL(url).pathname.endsWith('/@react-three_fiber.js'))!;
+    const { _roots } = await import(/* @vite-ignore */ r3fPath);
+    const canvas = document.querySelector('canvas')!;
+    const rect = canvas.getBoundingClientRect();
+    const { scene, camera } = _roots.get(canvas).store.getState();
+    camera.updateMatrixWorld();
+    const pts: { x: number; y: number }[] = [];
+    scene.traverse((obj: any) => {
+      if (obj.parent?.name?.startsWith('cable-handles-') && obj.parent.children) {
+        for (const ch of obj.parent.children) {
+          if (ch.isGroup) {
+            const v = ch.position.clone().project(camera);
+            pts.push({
+              x: rect.left + ((v.x + 1) / 2) * rect.width,
+              y: rect.top + ((-v.y + 1) / 2) * rect.height,
+            });
+          }
+        }
+      }
+    });
+    return pts;
+  });
+  expect(handleScreen.length).toBeGreaterThanOrEqual(1);
+  const h0 = handleScreen[0];
+  await page.mouse.move(h0.x, h0.y);
+  await page.mouse.down();
+  await page.mouse.move(h0.x + 48, h0.y + 18, { steps: 6 });
+  await page.mouse.up();
+  await page.waitForTimeout(250);
+
+  const curAfterDrag = await state(page);
+  expect(curAfterDrag.cables?.[0]?.waypoints?.length).toBeGreaterThanOrEqual(1);
+
+  await page.locator('canvas').screenshot({
+    path: 'C:/Users/Leon/.gemini/antigravity/brain/77106729-550e-46ed-bc9d-f21a6207463d/manual-cable-gravity-clean.png',
+  });
+
+  expect(errors).toEqual([]);
+});
+
+test('monitor stock stand stops pitch at column front face without clipping and supports dual yaw (base vs ±30° screen)', async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+
+  await ready(page);
+
+  await selectSceneItem(page, '27 寸显示器');
+  await expect(page.getByLabel('俯仰角度', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('屏幕左右旋转', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('底座整体旋转', { exact: true })).toBeVisible();
+
+  // Verify 3D gizmo renders screen-only swivel arc & handle alongside base yaw ring
+  const gizmoNames = await page.evaluate(async () => {
+    const r3fPath = performance
+      .getEntriesByType('resource')
+      .map((entry) => entry.name)
+      .find((url) => new URL(url).pathname.endsWith('/@react-three_fiber.js'))!;
+    const { _roots } = await import(/* @vite-ignore */ r3fPath);
+    const canvas = document.querySelector('canvas')!;
+    const { scene } = _roots.get(canvas).store.getState();
+    const names: string[] = [];
+    scene.traverse((obj: any) => {
+      if (obj.name?.startsWith('item-')) names.push(obj.name);
+    });
+    return names;
+  });
+  expect(gizmoNames).toContain('item-rotate-handle');
+  expect(gizmoNames).toContain('item-screen-yaw-arc');
+  expect(gizmoNames).toContain('item-screen-yaw-handle');
+  expect(gizmoNames).toContain('item-pitch-handle');
+  expect(gizmoNames).toContain('item-roll-handle');
+
+  // 1. Pitch forward (+25°) must stop cleanly at stand column front face (< 13°) without slicing through column
+  await editNumber(page, '俯仰角度', '25');
+  const pitchedState = await state(page);
+  const pitchedMon = pitchedState.items.find((i: any) => i.kind === 'monitor')!;
+  expect(pitchedMon.pitch).toBeGreaterThan(5);
+  expect(pitchedMon.pitch).toBeLessThan(19);
+
+  // Rear-left close-up matching user report angle (media_1794990514044_9fef4084.jpg)
+  await page.evaluate(async () => {
+    const r3fPath = performance
+      .getEntriesByType('resource')
+      .map((entry) => entry.name)
+      .find((url) => new URL(url).pathname.endsWith('/@react-three_fiber.js'))!;
+    const { _roots } = await import(/* @vite-ignore */ r3fPath);
+    const canvas = document.querySelector('canvas')!;
+    const { camera, controls, invalidate } = _roots.get(canvas).store.getState();
+    controls.target.set(0, 0.94, -0.2);
+    camera.position.set(-0.34, 0.96, -0.68);
+    camera.lookAt(0, 0.94, -0.2);
+    controls.update();
+    invalidate();
+    await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+  });
+  await page.locator('canvas').screenshot({
+    path: 'C:/Users/Leon/.gemini/antigravity/brain/77106729-550e-46ed-bc9d-f21a6207463d/monitor-pitch-limit-clean.png',
+  });
+
+  // 2. Dual Yaw dimensions: screenYaw clamped to +-30° independent of 360° base rotation
+  await editNumber(page, '俯仰角度', '0');
+  await editNumber(page, '屏幕左右旋转', '45');
+  await expect(
+    page.locator('label.number-field.field-invalid', { hasText: '屏幕左右旋转' }),
+  ).toBeVisible();
+  await editNumber(page, '屏幕左右旋转', '30');
+  const clampedRight = (await state(page)).items.find((i: any) => i.kind === 'monitor')!;
+  expect(clampedRight.screenYaw).toBe(30);
+  expect(clampedRight.rotation).toBe(0);
+
+  await editNumber(page, '屏幕左右旋转', '-30');
+  const clampedLeft = (await state(page)).items.find((i: any) => i.kind === 'monitor')!;
+  expect(clampedLeft.screenYaw).toBe(-30);
+  expect(clampedLeft.rotation).toBe(0);
+
+  // Combine base yaw (15°) + screen-only yaw (30°) so both dimensions act independently & visibly
+  await editNumber(page, '底座整体旋转', '15');
+  await editNumber(page, '屏幕左右旋转', '30');
+  const dualYawMon = (await state(page)).items.find((i: any) => i.kind === 'monitor')!;
+  expect(dualYawMon.rotation).toBe(15);
+  expect(dualYawMon.screenYaw).toBe(30);
+
+  // Front-top-right angle clearly showing rotated base platter + 30° further swiveled screen + dual yaw gizmo
+  await page.evaluate(async () => {
+    const r3fPath = performance
+      .getEntriesByType('resource')
+      .map((entry) => entry.name)
+      .find((url) => new URL(url).pathname.endsWith('/@react-three_fiber.js'))!;
+    const { _roots } = await import(/* @vite-ignore */ r3fPath);
+    const canvas = document.querySelector('canvas')!;
+    const { camera, controls, invalidate } = _roots.get(canvas).store.getState();
+    controls.target.set(0, 0.96, -0.15);
+    camera.position.set(0.55, 1.38, 0.72);
+    camera.lookAt(0, 0.96, -0.15);
+    controls.update();
+    invalidate();
+    await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+  });
+  await page.locator('canvas').screenshot({
+    path: 'C:/Users/Leon/.gemini/antigravity/brain/77106729-550e-46ed-bc9d-f21a6207463d/monitor-dual-yaw.png',
+  });
+
+  // 3. Replicate user's exact scenario (lowered lift + screenYaw + negative pitch + DP->MacBook cable):
+  //    verify upper Dell dome never clips the top column cap AND cable never clips the monitor baseplate!
+  await editNumber(page, '底座整体旋转', '0');
+  await editNumber(page, '屏幕左右旋转', '30');
+  await editNumber(page, '屏幕高度', '-5');
+  await editNumber(page, '俯仰角度', '-21');
+
+  await library(page);
+  await page.getByRole('button', { name: '添加桌面音响', exact: true }).click();
+  await editNumber(page, '左右位置', '28');
+  await editNumber(page, '前后位置', '-14');
+  await library(page);
+  await page.getByRole('button', { name: '添加MacBook', exact: true }).click();
+  await editNumber(page, '左右位置', '50');
+  await editNumber(page, '前后位置', '14');
+  await page.locator('.library-tabs button', { hasText: '线缆' }).click();
+  const sigZone = page.getByRole('region', { name: '信号与音频线缆' });
+  await sigZone.getByRole('button', { name: 'DP ↔ Type-C', exact: true }).click();
+  const fromSel = page.getByLabel('左侧起点接口', { exact: true });
+  const toSel = page.getByLabel('左侧终点接口', { exact: true });
+  const dpVal = await fromSel
+    .locator('option', { hasText: /显示器.*DisplayPort/ })
+    .first()
+    .getAttribute('value');
+  await fromSel.selectOption(dpVal!);
+  const mbVal = await toSel
+    .locator('option', { hasText: /MacBook.*(Thunderbolt|USB-C)/ })
+    .first()
+    .getAttribute('value');
+  await toSel.selectOption(mbVal!);
+  await page.getByRole('button', { name: '确认接线', exact: true }).click();
+  await selectSceneItem(page, '27 寸显示器');
+
+  await page.evaluate(async () => {
+    const r3fPath = performance
+      .getEntriesByType('resource')
+      .map((entry) => entry.name)
+      .find((url) => new URL(url).pathname.endsWith('/@react-three_fiber.js'))!;
+    const { _roots } = await import(/* @vite-ignore */ r3fPath);
+    const canvas = document.querySelector('canvas')!;
+    const { camera, controls, invalidate } = _roots.get(canvas).store.getState();
+    controls.target.set(0.06, 0.88, -0.14);
+    camera.position.set(0.56, 1.06, -0.74);
+    camera.lookAt(0.06, 0.88, -0.14);
+    controls.update();
+    invalidate();
+    await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+  });
+  await page.locator('canvas').screenshot({
+    path: 'C:/Users/Leon/.gemini/antigravity/brain/77106729-550e-46ed-bc9d-f21a6207463d/monitor-top-col-and-base-cable-clean.png',
+  });
+
+  // High rear-right view matching user screenshot (media_1794994459916_eeee8f63.jpg) showing straight desktop cable around speaker
+  await page.evaluate(async () => {
+    const r3fPath = performance
+      .getEntriesByType('resource')
+      .map((entry) => entry.name)
+      .find((url) => new URL(url).pathname.endsWith('/@react-three_fiber.js'))!;
+    const { _roots } = await import(/* @vite-ignore */ r3fPath);
+    const canvas = document.querySelector('canvas')!;
+    const { camera, controls, invalidate } = _roots.get(canvas).store.getState();
+    controls.target.set(0.24, 0.8, -0.04);
+    camera.position.set(0.86, 1.38, -0.72);
+    camera.lookAt(0.24, 0.8, -0.04);
+    controls.update();
+    invalidate();
+    await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+  });
+  await page.locator('canvas').screenshot({
+    path: 'C:/Users/Leon/.gemini/antigravity/brain/77106729-550e-46ed-bc9d-f21a6207463d/cable-straight-desktop-around-speaker.png',
+  });
+
+  expect(errors).toEqual([]);
+});
+
+test('43. 定长线缆禁止超长拉伸且保持固定长度，并避免穿入桌下横杠', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+
+  await ready(page);
+  await resetToCleanMonitorDesk(page);
+
+  await library(page);
+  await page.getByRole('button', { name: '添加MacBook', exact: true }).click();
+  await editNumber(page, '左右位置', '68');
+  await editNumber(page, '前后位置', '20');
+
+  // 1. 选择固定 0.8 m Type-C 线连接远端设备 -> 直接报错且不添加线缆
+  await page.locator('.library-tabs button', { hasText: '线缆' }).click();
+  const signalZone = page.getByRole('region', { name: '信号与音频线缆' });
+  await signalZone.getByRole('button', { name: '双头 Type-C', exact: true }).click();
+  const lenGroup = page.getByRole('group', { name: '左栏线缆长度' });
+  await lenGroup.getByRole('button', { name: '0.8m', exact: true }).click();
+
+  const fromSelect = page.getByLabel('左侧起点接口', { exact: true });
+  const toSelect = page.getByLabel('左侧终点接口', { exact: true });
+  const monUsbc = await fromSelect
+    .locator('option', { hasText: /显示器.*(Thunderbolt|USB-C|Type-C)/ })
+    .first()
+    .getAttribute('value');
+  await fromSelect.selectOption(monUsbc!);
+  const mbUsbc = await toSelect
+    .locator('option', { hasText: /MacBook.*(Thunderbolt|USB-C|雷雳)/ })
+    .first()
+    .getAttribute('value');
+  await toSelect.selectOption(mbUsbc!);
+  await page.getByRole('button', { name: '确认接线', exact: true }).click();
+  await expect(page.getByText(/线缆长度不足/)).toBeVisible();
+  expect((await state(page)).cables ?? []).toHaveLength(0);
+
+  // 2. 切换为固定 2 m 后成功连接，并在桌面维持实际 ~2.0 m 走线余量（不被拉缩成最短直线）
+  await lenGroup.getByRole('button', { name: '2m', exact: true }).click();
+  await page.getByRole('button', { name: '确认接线', exact: true }).click();
+  await expect(page.locator('.wired-cable-item')).toHaveCount(1);
+  await page.locator('.wired-cable-item').first().click();
+  await expect(page.getByText(/线身 .* · 需 (1\.9[4-9]|2\.0[0-5]) m/)).toBeVisible();
+  // Trying to shrink the connected fixed 2 m cable to 0.8 m directly fails without modifying it
+  await page
+    .getByRole('group', { name: '线缆长度预设' })
+    .getByRole('button', { name: '0.8m', exact: true })
+    .click();
+  await expect(page.getByText(/线缆长度不足/)).toBeVisible();
+  expect((await state(page)).cables![0].lengthM).toBe(2);
+
+  // 俯视斜后方确认固定 2 m 桌面多余线长形成整齐顺滑服务弯而非密集锯齿
+  await page.evaluate(async () => {
+    const r3fPath = performance
+      .getEntriesByType('resource')
+      .map((entry) => entry.name)
+      .find((url) => new URL(url).pathname.endsWith('/@react-three_fiber.js'))!;
+    const { _roots } = await import(/* @vite-ignore */ r3fPath);
+    const canvas = document.querySelector('canvas')!;
+    const { camera, controls, invalidate } = _roots.get(canvas).store.getState();
+    controls.target.set(0.28, 0.78, -0.04);
+    camera.position.set(0.75, 1.48, -0.68);
+    camera.lookAt(0.28, 0.78, -0.04);
+    controls.update();
+    invalidate();
+    await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+  });
+  await page.locator('canvas').screenshot({
+    path: 'C:/Users/Leon/.gemini/antigravity/brain/77106729-550e-46ed-bc9d-f21a6207463d/cable-fixed-length-loop.png',
+  });
+
+  // 3. 添加地面插座并从显示器接入电源线（绕桌后缘下桌），核验绕开桌下后横梁不穿杠
+  await library(page);
+  await page.getByRole('button', { name: '添加墙面 / 地面插座', exact: true }).click();
+  await page.getByRole('button', { name: '附着地面', exact: true }).click();
+  await editNumber(page, '左右位置', '24');
+  await editNumber(page, '前后位置', '-14');
+
+  await page.locator('.library-tabs button', { hasText: '线缆' }).click();
+  const powerZone = page.getByRole('region', { name: '充电线与电源线专区' });
+  await powerZone.locator('button').first().click();
+  await lenGroup.getByRole('button', { name: '1.8m', exact: true }).click();
+  const pFrom = page.getByLabel('左侧起点接口', { exact: true });
+  const pTo = page.getByLabel('左侧终点接口', { exact: true });
+  const monAc = await pFrom
+    .locator('option', { hasText: /显示器.*(电源|AC)/ })
+    .first()
+    .getAttribute('value');
+  await pFrom.selectOption(monAc!);
+  const floorAc = await pTo.locator('option', { hasText: /插座/ }).first().getAttribute('value');
+  await pTo.selectOption(floorAc!);
+  await page.getByRole('button', { name: '确认接线', exact: true }).click();
+  await expect(page.locator('.wired-cable-item')).toHaveCount(2);
+
+  // 桌下视角对照用户截图 (media_1794995068859_344718a8.png) 查看桌下银色后横梁无穿模
+  await page.evaluate(async () => {
+    const r3fPath = performance
+      .getEntriesByType('resource')
+      .map((entry) => entry.name)
+      .find((url) => new URL(url).pathname.endsWith('/@react-three_fiber.js'))!;
+    const { _roots } = await import(/* @vite-ignore */ r3fPath);
+    const canvas = document.querySelector('canvas')!;
+    const { camera, controls, invalidate } = _roots.get(canvas).store.getState();
+    controls.target.set(0.05, 0.58, -0.32);
+    camera.position.set(0.45, 0.56, 0.38);
+    camera.lookAt(0.05, 0.58, -0.32);
+    controls.update();
+    invalidate();
+    await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+  });
+  await page.locator('canvas').screenshot({
+    path: 'C:/Users/Leon/.gemini/antigravity/brain/77106729-550e-46ed-bc9d-f21a6207463d/cable-under-desk-crossbar-clean.png',
+  });
+
+  expect(errors).toEqual([]);
+});
+
+test('44. Type-C 分为双头 Type-C 与 USB ↔ Type-C 且不自动附带插头（插头为额外配件）', async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+
+  await ready(page);
+  await resetToCleanMonitorDesk(page);
+
+  await library(page);
+  await page.getByRole('button', { name: '添加MacBook', exact: true }).click();
+  await editNumber(page, '左右位置', '38');
+  await editNumber(page, '前后位置', '14');
+
+  await library(page);
+  await page.getByRole('button', { name: '添加智能桌面插排', exact: true }).click();
+  await editNumber(page, '左右位置', '-42');
+  await editNumber(page, '前后位置', '-18');
+
+  await page.locator('.library-tabs button', { hasText: '线缆' }).click();
+
+  // 1. 信号与音频线明确分为“双头 Type-C”和“USB ↔ Type-C”，不再存在单一 Type-C 按钮
+  const signalZone = page.getByRole('region', { name: '信号与音频线缆' });
+  await expect(signalZone.getByRole('button', { name: '双头 Type-C', exact: true })).toBeVisible();
+  await expect(signalZone.getByRole('button', { name: 'USB ↔ Type-C', exact: true })).toBeVisible();
+  await expect(signalZone.getByRole('button', { name: 'Type-C', exact: true })).toHaveCount(0);
+
+  // 2. 选择“USB ↔ Type-C”，将显示器 USB-A 下行口连向 MacBook Type-C 口，且默认不附带充电头
+  await signalZone.getByRole('button', { name: 'USB ↔ Type-C', exact: true }).click();
+  const accessorySelect = page.getByLabel('额外插头配件', { exact: true });
+  await expect(accessorySelect).toBeVisible();
+  await expect(accessorySelect).toHaveValue('');
+
+  const fromSelect = page.getByLabel('左侧起点接口', { exact: true });
+  const toSelect = page.getByLabel('左侧终点接口', { exact: true });
+  const monUsba = await fromSelect
+    .locator('option', { hasText: /显示器.*USB-A/ })
+    .first()
+    .getAttribute('value');
+  expect(monUsba).toBeTruthy();
+  await fromSelect.selectOption(monUsba!);
+
+  const mbUsbc = await toSelect
+    .locator('option', { hasText: /MacBook.*(Thunderbolt|USB-C|Type-C|雷雳)/ })
+    .first()
+    .getAttribute('value');
+  expect(mbUsbc).toBeTruthy();
+  await toSelect.selectOption(mbUsbc!);
+
+  await page.getByRole('button', { name: '确认接线', exact: true }).click();
+  await expect(page.locator('.wired-cable-item')).toHaveCount(1);
+  await expect(page.locator('.wired-cable-item').first()).toContainText('USB ↔ Type-C');
+
+  let c0 = (await state(page)).cables![0];
+  expect(c0.fromPlugType).toBe('usba');
+  expect(c0.toPlugType).toBe('usbc');
+
+  // 3. 充电线专区中的“双头 Type-C 供电线”默认无充电头配件，不直接接入 220V AC 插孔，仅直连插排 Type-C 快充口
+  const powerZone = page.getByRole('region', { name: '充电线与电源线专区' });
+  await expect(powerZone.getByRole('button', { name: /双头 Type-C 供电线/ })).toBeVisible();
+  await expect(powerZone.getByRole('button', { name: /USB 转 Type-C 供电线/ })).toBeVisible();
+  await powerZone.getByRole('button', { name: /双头 Type-C 供电线/ }).click();
+  await expect(accessorySelect).toHaveValue('');
+
+  const mbFromOpt = await fromSelect
+    .locator('option', { hasText: /MacBook.*(Thunderbolt|USB-C|Type-C|雷雳)/ })
+    .first()
+    .getAttribute('value');
+  expect(mbFromOpt).toBeTruthy();
+  await fromSelect.selectOption(mbFromOpt!);
+
+  await expect(toSelect.locator('option', { hasText: /插排.*AC 插孔/ })).toHaveCount(0);
+  const stripUsbcOpt = await toSelect
+    .locator('option', { hasText: /插排.*Type-C 快充口/ })
+    .first()
+    .getAttribute('value');
+  expect(stripUsbcOpt).toBeTruthy();
+  await toSelect.selectOption(stripUsbcOpt!);
+  await page.getByRole('button', { name: '确认接线', exact: true }).click();
+  await expect(page.locator('.wired-cable-item')).toHaveCount(2);
+
+  const c1NoPlug = (await state(page)).cables![1];
+  expect(c1NoPlug.fromPlugType).toBe('usbc');
+  expect(c1NoPlug.toPlugType).toBe('usbc');
+
+  // 4. 仅当显式选配额外插头配件（如 GaN 快充头）后，才解锁 AC 插孔并配备对应充电头
+  await page
+    .getByRole('group', { name: '左栏线缆长度' })
+    .getByRole('button', { name: '1.5m', exact: true })
+    .click();
+  const mbFromOpt2 = await fromSelect
+    .locator('option', { hasText: /MacBook.*(Thunderbolt|USB-C|Type-C|雷雳)/ })
+    .nth(1)
+    .getAttribute('value');
+  await fromSelect.selectOption(mbFromOpt2!);
+  await accessorySelect.selectOption('ganAdapter');
+  const stripAcOpt = await toSelect
+    .locator('option', { hasText: /插排.*AC 插孔/ })
+    .first()
+    .getAttribute('value');
+  expect(stripAcOpt).toBeTruthy();
+  await toSelect.selectOption(stripAcOpt!);
+  await page.getByRole('button', { name: '确认接线', exact: true }).click();
+  await expect(page.locator('.wired-cable-item')).toHaveCount(3);
+  const c2WithGan = (await state(page)).cables![2];
+  expect(c2WithGan.toPlugType).toBe('ganAdapter');
+
+  await page.evaluate(async () => {
+    const r3fPath = performance
+      .getEntriesByType('resource')
+      .map((entry) => entry.name)
+      .find((url) => new URL(url).pathname.endsWith('/@react-three_fiber.js'))!;
+    const { _roots } = await import(/* @vite-ignore */ r3fPath);
+    const canvas = document.querySelector('canvas')!;
+    const { camera, controls, invalidate } = _roots.get(canvas).store.getState();
+    controls.target.set(0.08, 0.78, -0.02);
+    camera.position.set(0.55, 1.32, -0.62);
+    camera.lookAt(0.08, 0.78, -0.02);
+    controls.update();
+    invalidate();
+    await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+  });
+  await page.screenshot({
+    path: 'C:/Users/Leon/.gemini/antigravity/brain/77106729-550e-46ed-bc9d-f21a6207463d/typec-dual-and-usba-clean.png',
+  });
+
+  expect(errors).toEqual([]);
+});
+
+test('45. 3D 放置悬垂线缆与移动已接线设备均严禁拉伸超过固定长度', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+
+  await ready(page);
+  await resetToCleanMonitorDesk(page);
+
+  await page.locator('.library-tabs button', { hasText: '线缆' }).click();
+  await page
+    .getByRole('region', { name: '信号与音频线缆' })
+    .getByRole('button', { name: '双头 Type-C', exact: true })
+    .click();
+  await page
+    .getByRole('group', { name: '左栏线缆长度' })
+    .getByRole('button', { name: '0.8m', exact: true })
+    .click();
+  await page.getByRole('button', { name: '进入 3D 点选端口接线', exact: true }).click();
+
+  // 将视角摆至右后侧俯视（避开遮挡），清晰点击音响/显示器完全无遮挡的绿色端口球
+  await page.evaluate(async () => {
+    const r3fPath = performance
+      .getEntriesByType('resource')
+      .map((entry) => entry.name)
+      .find((url) => new URL(url).pathname.endsWith('/@react-three_fiber.js'))!;
+    const { _roots } = await import(/* @vite-ignore */ r3fPath);
+    const canvas = document.querySelector('canvas')!;
+    const { camera, controls, invalidate } = _roots.get(canvas).store.getState();
+    controls.target.set(0.05, 0.85, -0.05);
+    camera.position.set(0.55, 1.35, 0.72);
+    camera.lookAt(0.05, 0.85, -0.05);
+    controls.update();
+    invalidate();
+    await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+  });
+
+  // 找到第一个可直击的绿色可用端口球并点击锁定 A 端（自动切换至手持 B 端）
+  const monOrb = await page.evaluate(async () => {
+    const r3fPath = performance
+      .getEntriesByType('resource')
+      .map((entry) => entry.name)
+      .find((url) => new URL(url).pathname.endsWith('/@react-three_fiber.js'))!;
+    const { _roots } = await import(/* @vite-ignore */ r3fPath);
+    const canvas = document.querySelector('canvas')!;
+    const rect = canvas.getBoundingClientRect();
+    const { scene, camera } = _roots.get(canvas).store.getState();
+    camera.updateMatrixWorld();
+    const pts: { x: number; y: number }[] = [];
+    scene.traverse((obj: any) => {
+      if (
+        obj.isMesh &&
+        obj.geometry?.type === 'SphereGeometry' &&
+        obj.material?.color?.getHexString?.() === '22c55e'
+      ) {
+        const v = obj.position.clone().project(camera);
+        if (v.z >= -1 && v.z <= 1) {
+          pts.push({
+            x: rect.left + ((v.x + 1) / 2) * rect.width,
+            y: rect.top + ((-v.y + 1) / 2) * rect.height,
+          });
+        }
+      }
+    });
+    return pts[0];
+  });
+  expect(monOrb).toBeTruthy();
+  await page.mouse.click(monOrb!.x, monOrb!.y);
+  await expect(page.getByRole('status')).toContainText('手持 B 端');
+
+  // 将相机拉高俯视后方全桌面，并把光标移到桌面右侧（远超 0.8 m），验证实时线身严格保持 <= 0.8 m 且不再伸长
+  await page.evaluate(async () => {
+    const r3fPath = performance
+      .getEntriesByType('resource')
+      .map((entry) => entry.name)
+      .find((url) => new URL(url).pathname.endsWith('/@react-three_fiber.js'))!;
+    const { _roots } = await import(/* @vite-ignore */ r3fPath);
+    const canvas = document.querySelector('canvas')!;
+    const { camera, controls, invalidate } = _roots.get(canvas).store.getState();
+    controls.target.set(0.0, 0.8, 0.02);
+    camera.position.set(0.0, 1.72, -1.08);
+    camera.lookAt(0.0, 0.8, 0.02);
+    controls.update();
+    invalidate();
+    await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+  });
+  const canvasRect = await page.locator('canvas').boundingBox();
+  expect(canvasRect).toBeTruthy();
+  await page.mouse.move(
+    canvasRect!.x + canvasRect!.width * 0.88,
+    canvasRect!.y + canvasRect!.height * 0.56,
+    { steps: 8 },
+  );
+  await page.waitForTimeout(320);
+
+  const liveMetrics = await page.evaluate(async () => {
+    const r3fPath = performance
+      .getEntriesByType('resource')
+      .map((entry) => entry.name)
+      .find((url) => new URL(url).pathname.endsWith('/@react-three_fiber.js'))!;
+    const { _roots } = await import(/* @vite-ignore */ r3fPath);
+    const { scene } = _roots.get(document.querySelector('canvas')!).store.getState();
+    const tube = scene.getObjectByName('live-wiring-cable-tube');
+    const nodes = (tube?.userData?.liveNodes ?? []) as { x: number; y: number; z: number }[];
+    let totalLen = 0;
+    for (let i = 1; i < nodes.length; i++) {
+      totalLen += Math.hypot(
+        nodes[i].x - nodes[i - 1].x,
+        nodes[i].y - nodes[i - 1].y,
+        nodes[i].z - nodes[i - 1].z,
+      );
+    }
+    const start = nodes[0];
+    const end = nodes[nodes.length - 1];
+    const span = start && end ? Math.hypot(end.x - start.x, end.y - start.y, end.z - start.z) : 0;
+    return { count: nodes.length, totalLen, span };
+  });
+  expect(liveMetrics.count).toBeGreaterThanOrEqual(8);
+  expect(liveMetrics.totalLen).toBeLessThanOrEqual(0.8);
+  expect(liveMetrics.span).toBeLessThanOrEqual(0.79);
+
+  await page.locator('canvas').screenshot({
+    path: 'C:/Users/Leon/.gemini/antigravity/brain/77106729-550e-46ed-bc9d-f21a6207463d/live-wiring-no-stretch-taut.png',
+  });
+
+  await page.keyboard.press('Escape');
+
+  // 验证已接线缆的设备向远处移动时同样受固定线长牵引限位，不会把线缆拉长
+  await library(page);
+  await page.getByRole('button', { name: '添加MacBook', exact: true }).click();
+  await editNumber(page, '左右位置', '32');
+  await editNumber(page, '前后位置', '14');
+
+  await page.locator('.library-tabs button', { hasText: '线缆' }).click();
+  await page
+    .getByRole('region', { name: '信号与音频线缆' })
+    .getByRole('button', { name: '双头 Type-C', exact: true })
+    .click();
+  await page
+    .getByRole('group', { name: '左栏线缆长度' })
+    .getByRole('button', { name: '1m', exact: true })
+    .click();
+  const fromSelect = page.getByLabel('左侧起点接口', { exact: true });
+  const toSelect = page.getByLabel('左侧终点接口', { exact: true });
+  const monUsbc = await fromSelect
+    .locator('option', { hasText: /显示器.*(Thunderbolt|USB-C|Type-C)/ })
+    .first()
+    .getAttribute('value');
+  await fromSelect.selectOption(monUsbc!);
+  const mbUsbc = await toSelect
+    .locator('option', { hasText: /MacBook.*(Thunderbolt|USB-C|雷雳)/ })
+    .first()
+    .getAttribute('value');
+  await toSelect.selectOption(mbUsbc!);
+  await page.getByRole('button', { name: '确认接线', exact: true }).click();
+  await expect(page.locator('.wired-cable-item')).toHaveCount(1);
+
+  await selectSceneItem(page, 'MacBook');
+  await editNumber(page, '左右位置', '95');
+  await expect(page.getByText(/已达固定线缆长度极限/)).toBeVisible();
+  const st = await state(page);
+  const movedMb = st.items.find((i: SceneItem) => i.kind === 'macbook')!;
+  expect(movedMb.x).toBeLessThan(0.95);
+
+  expect(errors).toEqual([]);
+});
+
+test('46. 初始场景仅保留显示器与 MacBook 并默认插好双头 Type-C 连线', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+
+  await ready(page);
+  await expect(page).toHaveTitle(/桌构 DeskCraft/);
+  await expect(page.locator('.brand')).toContainText('桌构DeskCraft');
+  const st = await state(page);
+  expect(st.items.map((i: SceneItem) => i.kind)).toEqual(['monitor', 'macbook']);
+  expect(st.cables ?? []).toHaveLength(1);
+  expect(st.cables![0].kind).toBe('usbc');
+  expect(st.cables![0].fromPlugType).toBe('usbc');
+  expect(st.cables![0].toPlugType).toBe('usbc');
+
+  await page.locator('.library-tabs button', { hasText: '线缆' }).click();
+  await expect(page.locator('.wired-cable-item')).toHaveCount(1);
+  await expect(page.locator('.wired-cable-item').first()).toContainText('双头 Type-C');
+
+  await page.evaluate(async () => {
+    const r3fPath = performance
+      .getEntriesByType('resource')
+      .map((entry) => entry.name)
+      .find((url) => new URL(url).pathname.endsWith('/@react-three_fiber.js'))!;
+    const { _roots } = await import(/* @vite-ignore */ r3fPath);
+    const canvas = document.querySelector('canvas')!;
+    const { camera, controls, invalidate } = _roots.get(canvas).store.getState();
+    controls.target.set(0.06, 0.85, -0.04);
+    camera.position.set(0.58, 1.28, -0.82);
+    camera.lookAt(0.06, 0.85, -0.04);
+    controls.update();
+    invalidate();
+    await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+  });
+  await page.screenshot({
+    path: 'C:/Users/Leon/.gemini/antigravity/brain/77106729-550e-46ed-bc9d-f21a6207463d/initial-scene-monitor-macbook-wired.png',
+  });
 
   expect(errors).toEqual([]);
 });

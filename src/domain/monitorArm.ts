@@ -125,7 +125,7 @@ export type DragPreviewState =
   | {
       kind: 'pose';
       id: string;
-      axis: 'pitch' | 'roll' | 'lidAngle';
+      axis: 'pitch' | 'screenYaw' | 'roll' | 'lidAngle';
       value: number;
       hitObstacle?: string;
     }

@@ -12,6 +12,12 @@ describe('尺寸与放置', () => {
     const p = defaultProject();
     expect(projectSchema.safeParse(p).success).toBe(true);
     expect(p.items.every((i) => !isOutOfBounds(i, p.desk))).toBe(true);
+    expect(p.desk.finish).toBe('wood');
+
+    p.desk.finish = 'solid';
+    expect(projectSchema.safeParse(p).success).toBe(true);
+    (p.desk as { finish?: string }).finish = 'glossy';
+    expect(projectSchema.safeParse(p).success).toBe(false);
   });
   it('旋转后角落越界，即便中心在桌内', () => {
     const p = defaultProject(),
@@ -56,13 +62,6 @@ describe('尺寸与放置', () => {
     monitor.pitch = 30;
     monitor.lift = 1;
     expect(projectSchema.safeParse(p).success).toBe(false);
-  });
-  it('屏幕挂灯作为内置物品可加入并通过校验', () => {
-    const p = defaultProject();
-    const bar = makeItem('lightbar');
-    expect(bar.kind).toBe('lightbar');
-    p.items.push(bar);
-    expect(projectSchema.safeParse(p).success).toBe(true);
   });
 });
 describe('编辑历史', () => {
@@ -135,5 +134,17 @@ describe('编辑历史', () => {
     expect(s().project.assets.some((a) => a.id === 'test')).toBe(true);
     s().redo();
     expect(s().project.items.some((i) => i.assetId === 'test')).toBe(true);
+  });
+  it('滑块拖动的连续更新只记一步历史', () => {
+    const s = () => useEditor.getState();
+    const id = s().project.items[0].id;
+    s().beginGesture();
+    for (let n = 0; n < 10; n++) s().updateItem(id, { x: 0.1 + n * 0.01 });
+    expect(s().past).toHaveLength(0);
+    s().endGesture();
+    expect(s().past).toHaveLength(1);
+    expect(s().project.items[0].x).toBeCloseTo(0.19);
+    s().undo();
+    expect(s().project.items[0].x).toBe(-0.12);
   });
 });

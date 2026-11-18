@@ -1,5 +1,6 @@
 import { openDB, type DBSchema } from 'idb';
 import { projectSchema, type Project } from '../domain/project';
+import { removeRetiredItems } from './legacyProject';
 
 interface DeskspaceDatabase extends DBSchema {
   projects: { key: string; value: unknown };
@@ -96,7 +97,7 @@ export async function loadProject(): Promise<{
       await committed;
       return null;
     }
-    const project = validateProject(stored);
+    const project = validateProject(removeRetiredItems(stored));
     const values = await Promise.all(
       project.assets.map((asset) => tx.objectStore('assets').get(asset.id)),
     );

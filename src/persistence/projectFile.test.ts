@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Project } from '../domain/project';
+import { makeItem } from '../domain/catalog';
 import type { LoadedModel } from '../assets/importModel';
 import { inspectModel, disposeModel } from '../assets/importModel';
 import { exportProjectFile, importProjectFile } from './projectFile';
@@ -67,10 +68,60 @@ describe('projectFile export', () => {
     expect(file.type).toBe('application/json');
     const imported = await importProjectFile(file);
     expect(imported.project).toEqual(project);
+    expect(imported.project).not.toHaveProperty('environment');
     expect(await imported.blobs.get('asset')?.text()).toBe('model');
     expect(imported.models.get('asset')?.sourceSize.width).toBe(30);
     expect(inspectModel).toHaveBeenCalledWith(expect.any(Blob), 'glb');
     expect(disposeModel).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])(
+    'roundtrips a mounted screen lamp and dark environment with imported bytes (legacy lightbar: %s)',
+    async (includeLegacy) => {
+      const { project, blobs } = fixture();
+      const monitor = makeItem('monitor');
+      const lamp = makeItem('screenLamp', monitor.id);
+      Object.assign(lamp.lamp!, {
+        enabled: false,
+        brightness: 83,
+        temperature: 5200,
+        tilt: 32,
+        horizontalAngle: 105,
+        verticalAngle: 48,
+        softness: 0.27,
+      });
+      lamp.size.width = 0.6;
+      project.items.push(monitor, lamp);
+      project.environment = 'dark';
+      const file = await exportProjectFile(project, blobs);
+      const json = JSON.parse(await file.text());
+      if (includeLegacy) {
+        json.project.items.push({ ...monitor, id: 'retired-lightbar', kind: 'lightbar' });
+      }
+      const imported = await importProjectFile(asFile(json));
+      expect(imported.project).toEqual(project);
+      expect(imported.project.environment).toBe('dark');
+      expect(imported.project.items.find((item) => item.id === lamp.id)).toEqual(lamp);
+      expect(imported.project.items.map((item) => item.kind)).toEqual([
+        'imported',
+        'monitor',
+        'screenLamp',
+      ]);
+      expect(await imported.blobs.get('asset')?.text()).toBe('model');
+      expect(imported.models.size).toBe(1);
+      expect(inspectModel).toHaveBeenCalledExactlyOnceWith(expect.any(Blob), 'glb');
+    },
+  );
+
+  it('imports older backups while removing retired lightbars', async () => {
+    const old = envelope();
+    const project = {
+      ...old.project,
+      items: [...old.project.items, { ...old.project.items[0], id: 'old', kind: 'lightbar' }],
+    };
+    const imported = await importProjectFile(asFile({ ...old, project }));
+    expect(imported.project).toEqual(old.project);
+    expect(await imported.blobs.get('asset')?.text()).toBe('model');
   });
 
   it('exports only distinct current item assets and leaves the history untouched', async () => {
@@ -247,5 +298,26 @@ describe('projectFile import validation', () => {
     expect(inspectModel).toHaveBeenCalledTimes(2);
     expect(inspectModel).toHaveBeenLastCalledWith(expect.any(Blob), 'gltf');
     expect(disposeModel).toHaveBeenCalledExactlyOnceWith(first);
+  });
+
+  it('roundtrips left/right L-desk and legacy rectangle backup files and rejects invalid return', async () => {
+    const { project, blobs } = fixture();
+    const rectImported = await importProjectFile(await exportProjectFile(project, blobs));
+    expect(rectImported.project).toEqual(project);
+    expect('return' in rectImported.project.desk).toBe(false);
+
+    for (const side of ['left', 'right'] as const) {
+      const lProject: Project = {
+        ...project,
+        desk: { ...project.desk, return: { side, width: 0.7, extension: 0.9 } },
+      };
+      const imported = await importProjectFile(await exportProjectFile(lProject, blobs));
+      expect(imported.project).toEqual(lProject);
+    }
+
+    const badEnvelope = envelope();
+    badEnvelope.project.desk.width = 0.6;
+    badEnvelope.project.desk.return = { side: 'left', width: 0.4, extension: 0.6 };
+    await expect(importProjectFile(asFile(badEnvelope))).rejects.toThrow('侧翼宽度');
   });
 });

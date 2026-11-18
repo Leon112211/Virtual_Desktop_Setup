@@ -9,6 +9,7 @@ import {
   Check,
   ChevronDown,
   Box,
+  Cable as CableIcon,
   Move3D,
   Scan,
   MousePointer2,
@@ -29,6 +30,8 @@ import { useEditor } from './store/editorStore';
 import { defaultProject } from './domain/catalog';
 import { uid, type AssetMeta, type Project } from './domain/project';
 import { isOutOfBounds } from './domain/placement';
+import { editorErrorMessage } from './domain/screenLamp';
+import { armLimitMessage } from './domain/monitorArm';
 import { inspectModel, disposeModel, type LoadedModel } from './assets/importModel';
 import { registerModel, clearModelCache } from './assets/modelCache';
 import { saveProject, loadProject } from './persistence/projectRepository';
@@ -38,7 +41,18 @@ function errorText(e: unknown) {
   return e instanceof Error ? e.message : '操作未完成，请重试。';
 }
 export default function App() {
-  const { project, past, future, selected } = useEditor();
+  const {
+    project,
+    past,
+    future,
+    selected,
+    selectedCableId,
+    wiringMode,
+    wiringDraft,
+    wiringPreset,
+    collisionNotice,
+    dragPreview,
+  } = useEditor();
   const [ready, setReady] = useState(false),
     [saveState, setSaveState] = useState('正在恢复布局'),
     [warning, setWarning] = useState(''),
@@ -130,11 +144,12 @@ export default function App() {
           e.preventDefault();
           s.remove();
         } else if (e.key === 'Escape') {
+          if (s.dragPreview) return;
           s.select(null);
           setPanel(null);
         }
-      } catch {
-        notify('场景已达到模型预算，请先移除部分物品。');
+      } catch (error) {
+        notify(editorErrorMessage(error, '场景已达到模型预算，请先移除部分物品。'));
       }
     }
     window.addEventListener('keydown', key);
@@ -243,7 +258,7 @@ export default function App() {
     changeView('fit');
     notify('已新建默认桌搭。');
   }
-  const outside = project.items.filter((i) => isOutOfBounds(i, project.desk)).length;
+  const outside = project.items.filter((i) => isOutOfBounds(i, project.desk, project.items)).length;
   return (
     <div className={`app-shell ${panel ? 'show-' + panel : ''}`} aria-busy={!!busy || !ready}>
       <header className="app-header">
@@ -372,7 +387,59 @@ export default function App() {
               <span className="grid-icon" />1 格 = 10 cm
             </span>
           </div>
+          <div className="environment-controls" role="group" aria-label="照明环境">
+            {(
+              [
+                { value: 'bright', label: '明亮' },
+                { value: 'dark', label: '暗室' },
+              ] as const
+            ).map(({ value, label }) => (
+              <button
+                key={value}
+                aria-pressed={(project.environment ?? 'bright') === value}
+                onClick={() => {
+                  const s = useEditor.getState();
+                  s.endGesture();
+                  s.commit((p) => {
+                    p.environment = value;
+                  });
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           {sceneVisible && <DeskScene view={view} onError={notify} />}
+          {wiringMode && (
+            <div className="arm-limit-pill arm-elbow-pill" role="status">
+              <span>
+                {wiringDraft
+                  ? `3D 连线中${wiringPreset?.label ? `（${wiringPreset.label}）` : ''}：点击目标绿色端口或直接落至桌下`
+                  : `3D 连线中${wiringPreset?.label ? `（${wiringPreset.label}）` : ''}：请点击设备上绿色端口作为起点`}
+              </span>
+              {wiringDraft && (
+                <button
+                  type="button"
+                  style={{ pointerEvents: 'auto', marginLeft: 8, padding: '2px 8px', fontSize: 12 }}
+                  onClick={() => useEditor.getState().dropWiringDraftToFloor('auto')}
+                >
+                  落至桌下走线
+                </button>
+              )}
+              <button
+                type="button"
+                style={{ pointerEvents: 'auto', marginLeft: 8, padding: '2px 8px', fontSize: 12 }}
+                onClick={() => useEditor.getState().setWiringMode(false)}
+              >
+                取消
+              </button>
+            </div>
+          )}
+          {!wiringMode && collisionNotice && (
+            <div className="arm-limit-pill arm-elbow-pill" role="status">
+              <span>{collisionNotice}</span>
+            </div>
+          )}
           <div className="workspace-label">
             <span>为你的日常，找到更好的位置。</span>
             <small>真实尺寸 · 自由组合</small>
@@ -403,6 +470,16 @@ export default function App() {
             <button title="适配桌面" aria-label="适配桌面" onClick={() => changeView('fit')}>
               <Scan size={17} />
             </button>
+            <button
+              className={wiringMode ? 'active' : ''}
+              title="3D 点选端口手动连线"
+              aria-label="3D 手动连线"
+              aria-pressed={wiringMode}
+              onClick={() => useEditor.getState().setWiringMode(!wiringMode)}
+            >
+              <CableIcon size={16} />
+              连线
+            </button>
           </div>
           <div className="viewport-bottom">
             <div>
@@ -411,7 +488,9 @@ export default function App() {
                 <button
                   className="outbound-count"
                   onClick={() => {
-                    const first = project.items.find((i) => isOutOfBounds(i, project.desk));
+                    const first = project.items.find((i) =>
+                      isOutOfBounds(i, project.desk, project.items),
+                    );
                     if (first) useEditor.getState().select(first.id);
                   }}
                 >
@@ -424,7 +503,107 @@ export default function App() {
               <CircleHelp size={18} />
             </button>
           </div>
-          {selected && (
+          {dragPreview &&
+            (dragPreview.kind === undefined ||
+              dragPreview.kind === 'position' ||
+              dragPreview.kind === 'armElbow' ||
+              dragPreview.kind === 'armLowerPitch' ||
+              dragPreview.kind === 'armUpperPitch' ||
+              dragPreview.kind === 'armBase') &&
+            dragPreview.limitReason && (
+              <div className="arm-limit-pill" role="status">
+                <TriangleAlert size={13} />
+                <span>
+                  {armLimitMessage(
+                    dragPreview.limitReason,
+                    'maxReachCm' in dragPreview ? dragPreview.maxReachCm : undefined,
+                    'obstacleName' in dragPreview ? dragPreview.obstacleName : undefined,
+                  )}
+                </span>
+              </div>
+            )}
+          {dragPreview?.kind === 'rotation' && (
+            <div className="arm-limit-pill arm-elbow-pill" role="status">
+              <span>
+                旋转角度 {Math.round(dragPreview.rotation * 10) / 10}° ·{' '}
+                {dragPreview.hitObstacle
+                  ? `已触碰${dragPreview.hitObstacle}（防穿模限制）`
+                  : '自由旋转中（Esc 取消）'}
+              </span>
+            </div>
+          )}
+          {dragPreview?.kind === 'pose' && (
+            <div className="arm-limit-pill arm-elbow-pill" role="status">
+              <span>
+                {dragPreview.axis === 'pitch'
+                  ? `俯仰角度 ${Math.round(dragPreview.value * 10) / 10}° · ${
+                      dragPreview.hitObstacle
+                        ? `已触碰${dragPreview.hitObstacle}（防穿模限制）`
+                        : '俯仰调节中（Esc 取消）'
+                    }`
+                  : dragPreview.axis === 'roll'
+                    ? `屏幕翻转 ${Math.round(dragPreview.value * 10) / 10}° · ${
+                        dragPreview.hitObstacle
+                          ? `已触碰${dragPreview.hitObstacle}（防穿模限制）`
+                          : '翻转调节中（Esc 取消）'
+                      }`
+                    : `屏幕开合角 ${Math.round(dragPreview.value * 10) / 10}° · 开合调节中（Esc 取消）`}
+              </span>
+            </div>
+          )}
+          {dragPreview &&
+            (!dragPreview.kind || dragPreview.kind === 'position') &&
+            typeof dragPreview.wallY === 'number' && (
+              <div className="arm-limit-pill arm-elbow-pill" role="status">
+                <span>
+                  {project.items.find((i) => i.id === dragPreview.id)?.kind === 'wallOutlet'
+                    ? `离地高度 ${Math.round(dragPreview.wallY * 100)} cm`
+                    : `墙面挂高 ${Math.round(dragPreview.wallY * 100)} cm`}{' '}
+                  · 沿墙面拖动调节（Esc 取消）
+                </span>
+              </div>
+            )}
+          {dragPreview?.kind === 'armElbow' && !dragPreview.limitReason && (
+            <div className="arm-limit-pill arm-elbow-pill" role="status">
+              <span>
+                {dragPreview.role === 'primary' ? '主臂' : '副臂'}肘关节水平摆角{' '}
+                {Math.round(dragPreview.yawDeg)}° · 水平调节中（Esc 取消）
+              </span>
+            </div>
+          )}
+          {dragPreview?.kind === 'armLowerPitch' && !dragPreview.limitReason && (
+            <div className="arm-limit-pill arm-elbow-pill" role="status">
+              <span>
+                {dragPreview.role === 'primary' ? '主臂' : '副臂'}下长臂俯仰{' '}
+                {dragPreview.lowerPitchDeg.toFixed(1)}° · 定长 27.5 cm 上下调节中（Esc 取消）
+              </span>
+            </div>
+          )}
+          {dragPreview?.kind === 'armUpperPitch' && !dragPreview.limitReason && (
+            <div className="arm-limit-pill arm-elbow-pill" role="status">
+              <span>
+                {dragPreview.role === 'primary' ? '主臂' : '副臂'}气压上臂俯仰{' '}
+                {dragPreview.upperPitchDeg.toFixed(1)}° · 定长 30.5 cm 升降调节中（Esc 取消）
+              </span>
+            </div>
+          )}
+          {dragPreview?.kind === 'armBase' && !dragPreview.limitReason && (
+            <div className="arm-limit-pill arm-elbow-pill" role="status">
+              <span>
+                支架底座（
+                {dragPreview.clampEdge === 'back'
+                  ? '后桌缘'
+                  : dragPreview.clampEdge === 'left'
+                    ? '左桌缘'
+                    : dragPreview.clampEdge === 'right'
+                      ? '右桌缘'
+                      : '桌面穿孔固定'}
+                ）· X {(dragPreview.clampX * 100).toFixed(1)} cm / Z{' '}
+                {(dragPreview.clampZ * 100).toFixed(1)} cm（Esc 取消）
+              </span>
+            </div>
+          )}
+          {(selected || selectedCableId) && (
             <button className="back-to-desk" onClick={() => useEditor.getState().select(null)}>
               编辑桌子
               <ChevronDown size={13} />
@@ -436,11 +615,11 @@ export default function App() {
       <footer className="app-footer">
         <span>
           <MousePointer2 size={13} />
-          拖动物品摆放
+          右键唤醒选中物品 · 选中后左键拖拽移动与旋转
         </span>
         <span>
           <Rotate3D size={14} />
-          空白处拖动旋转 · 右键平移 · 滚轮缩放
+          左键空白/未选物品旋转视角 · 中键或空白右键平移 · 滚轮缩放
         </span>
         <span className="footer-right">
           你的灵感，只保存在本地
@@ -470,9 +649,11 @@ export default function App() {
               <X size={16} />
             </button>
           </div>
-          <p>左键拖动物品，空白处拖动旋转视角。右键平移，滚轮缩放。</p>
+          <p>
+            未选中物品时，左键在任意位置拖拽均可旋转三维视角（不会误触物体）；右键点击物体唤醒并选中后，即可使用左键直接拖拽移动、点击/拖拽旋钮旋转或微调线缆节点；中键或空白处右键平移，滚轮缩放。
+          </p>
           <p>Ctrl / ⌘ + Z 撤销，Shift + Z 重做；Ctrl / ⌘ + D 复制，Delete 删除。Esc 取消拖动。</p>
-          <p>物品可以重叠，系统不进行物理碰撞判断。导入模型需手动确认实物尺寸。</p>
+          <p>已启用模型与线缆物理防穿模约束，支持穿桌面与显示器底座走线孔及节点微调。</p>
           <p>本地保存不是云备份。清理站点数据会删除布局，请定期导出工程。</p>
         </div>
       )}

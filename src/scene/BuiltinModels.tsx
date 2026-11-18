@@ -147,24 +147,13 @@ function BuiltinGeometry({ kind, color }: { kind: BuiltinKind; color: string }) 
         ))}
       </group>
     );
+  // Fallback silhouette. The pegboard has its own real-scale renderer
+  // (PegboardModel) so its slots keep their physical size when the board is resized.
   return (
     <group>
       <Box at={[0, 0.54, -0.12]} size={[1, 0.92, 0.08]} color={color} r={0.014} />
       <Box at={[-0.32, 0.02, 0]} size={[0.22, 0.04, 1]} color={color} />
       <Box at={[0.32, 0.02, 0]} size={[0.22, 0.04, 1]} color={color} />
-      {Array.from({ length: 9 }, (_, row) =>
-        Array.from({ length: 13 }, (_, col) => (
-          <Disc
-            key={`${row}-${col}`}
-            at={[-0.45 + col * 0.075, 0.16 + row * 0.092, -0.072]}
-            radius={0.009}
-            depth={0.003}
-            color="#a0a5a4"
-          />
-        )),
-      )}
-      <Box at={[-0.21, 0.35, 0.06]} size={[0.32, 0.035, 0.35]} color="#9da9a6" />
-      <Box at={[0.22, 0.63, 0.035]} size={[0.22, 0.32, 0.16]} color="#c2a77f" />
     </group>
   );
 }

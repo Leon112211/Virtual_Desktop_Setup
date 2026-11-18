@@ -3,6 +3,7 @@ import { IDBFactory } from 'fake-indexeddb';
 import { openDB } from 'idb';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Project } from '../domain/project';
+import { makeItem } from '../domain/catalog';
 import { loadProject, saveProject } from './projectRepository';
 
 function fixture(): { project: Project; blobs: Map<string, Blob> } {
@@ -56,7 +57,71 @@ describe('projectRepository', () => {
     await saveProject(project, blobs);
     const loaded = await loadProject();
     expect(loaded?.project).toEqual(project);
+    expect(loaded?.project).not.toHaveProperty('environment');
     expect(loaded?.blobs.get('asset')).toBeInstanceOf(Blob);
+    expect(await loaded?.blobs.get('asset')?.text()).toBe('model');
+  });
+
+  it.each([false, true])(
+    'roundtrips a mounted screen lamp and dark environment with imported bytes (legacy lightbar: %s)',
+    async (includeLegacy) => {
+      const { project, blobs } = fixture();
+      const monitor = makeItem('monitor');
+      const lamp = makeItem('screenLamp', monitor.id);
+      Object.assign(lamp.lamp!, {
+        enabled: false,
+        brightness: 83,
+        temperature: 5200,
+        tilt: 32,
+        horizontalAngle: 105,
+        verticalAngle: 48,
+        softness: 0.27,
+      });
+      lamp.size.width = 0.6;
+      project.items.push(monitor, lamp);
+      project.environment = 'dark';
+      await saveProject(project, blobs);
+      if (includeLegacy) {
+        const db = await openDB('deskspace', 1);
+        await db.put(
+          'projects',
+          {
+            ...project,
+            items: [...project.items, { ...monitor, id: 'retired-lightbar', kind: 'lightbar' }],
+          },
+          'current',
+        );
+        db.close();
+      }
+      const loaded = await loadProject();
+      expect(loaded?.project).toEqual(project);
+      expect(loaded?.project.environment).toBe('dark');
+      expect(loaded?.project.items.find((item) => item.id === lamp.id)).toEqual(lamp);
+      expect(loaded?.project.items.map((item) => item.kind)).toEqual([
+        'imported',
+        'monitor',
+        'screenLamp',
+      ]);
+      expect(loaded?.blobs.size).toBe(1);
+      expect(await loaded?.blobs.get('asset')?.text()).toBe('model');
+    },
+  );
+
+  it('opens older saved projects after removing retired lightbars', async () => {
+    const { project, blobs } = fixture();
+    await saveProject(project, blobs);
+    const db = await openDB('deskspace', 1);
+    await db.put(
+      'projects',
+      {
+        ...project,
+        items: [...project.items, { ...project.items[0], id: 'old', kind: 'lightbar' }],
+      },
+      'current',
+    );
+    db.close();
+    const loaded = await loadProject();
+    expect(loaded?.project).toEqual(project);
     expect(await loaded?.blobs.get('asset')?.text()).toBe('model');
   });
 
@@ -143,5 +208,33 @@ describe('projectRepository', () => {
     await db.put('projects', { schemaVersion: 999 }, 'current');
     db.close();
     await expect(loadProject()).rejects.toThrow('工程数据无效');
+  });
+
+  it('roundtrips left/right L-desk and legacy rectangle projects and rejects invalid return without overwriting', async () => {
+    const { project, blobs } = fixture();
+    await saveProject(project, blobs);
+    const loadedRect = await loadProject();
+    expect(loadedRect?.project).toEqual(project);
+    expect('return' in loadedRect!.project.desk).toBe(false);
+
+    for (const side of ['left', 'right'] as const) {
+      const lProject: Project = {
+        ...project,
+        desk: { ...project.desk, return: { side, width: 0.65, extension: 0.85 } },
+      };
+      await saveProject(lProject, blobs);
+      expect((await loadProject())?.project).toEqual(lProject);
+    }
+
+    const validRight: Project = {
+      ...project,
+      desk: { ...project.desk, return: { side: 'right', width: 0.65, extension: 0.85 } },
+    };
+    const invalidL: Project = {
+      ...project,
+      desk: { ...project.desk, width: 0.6, return: { side: 'left', width: 0.45, extension: 0.6 } },
+    };
+    await expect(saveProject(invalidL, blobs)).rejects.toThrow('工程数据无效');
+    expect((await loadProject())?.project).toEqual(validRight);
   });
 });

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { projectSchema, type Project, type Size } from '../domain/project';
 import { inspectModel, disposeModel, type LoadedModel } from '../assets/importModel';
+import { removeRetiredItems } from './legacyProject';
 
 const MIB = 1024 * 1024;
 const MAX_RESOURCE_BYTES = 15 * MIB;
@@ -12,7 +13,7 @@ const envelopeSchema = z
   .object({
     format: z.literal('deskspace'),
     version: z.literal(1),
-    project: projectSchema,
+    project: z.preprocess(removeRetiredItems, projectSchema),
     resources: z
       .array(
         z

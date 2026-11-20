@@ -5144,5 +5144,25 @@ test('46. 初始场景仅保留显示器与 MacBook 并默认插好双头 Type-C
     path: 'C:/Users/Leon/.gemini/antigravity/brain/77106729-550e-46ed-bc9d-f21a6207463d/initial-scene-monitor-macbook-wired.png',
   });
 
+  // Close-up on MacBook left Type-C port matching user photo to verify smooth coaxial strain-relief exit
+  await page.evaluate(async () => {
+    const r3fPath = performance
+      .getEntriesByType('resource')
+      .map((entry) => entry.name)
+      .find((url) => new URL(url).pathname.endsWith('/@react-three_fiber.js'))!;
+    const { _roots } = await import(/* @vite-ignore */ r3fPath);
+    const canvas = document.querySelector('canvas')!;
+    const { camera, controls, invalidate } = _roots.get(canvas).store.getState();
+    controls.target.set(0.16, 0.77, 0.01);
+    camera.position.set(0.14, 0.96, 0.28);
+    camera.lookAt(0.16, 0.77, 0.01);
+    controls.update();
+    invalidate();
+    await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+  });
+  await page.locator('canvas').screenshot({
+    path: 'C:/Users/Leon/.gemini/antigravity/brain/77106729-550e-46ed-bc9d-f21a6207463d/cable-end-resilience-closeup.png',
+  });
+
   expect(errors).toEqual([]);
 });

@@ -507,4 +507,29 @@ describe('cable gravity, bending resilience, and 3D live end-switching', () => {
     )!;
     expect(postPath.shortfallM).toBeLessThanOrEqual(0.016);
   });
+
+  it('reinforces both cable ends with coaxial strain-relief exit and stronger anti-bend resilience', () => {
+    const proj = defaultProject();
+    const cable = proj.cables![0];
+    const resolved = computeCablePath(cable, proj)!;
+    const pts = resolved.points;
+    expect(pts.length).toBeGreaterThanOrEqual(6);
+
+    // 1. Both ends exit coaxially along their connector direction (dot >= 0.96)
+    const fromExitDir = new Vector3().subVectors(pts[1], pts[0]).normalize();
+    const toExitDir = new Vector3()
+      .subVectors(pts[pts.length - 2], pts[pts.length - 1])
+      .normalize();
+    expect(fromExitDir.dot(resolved.fromPlug!.direction)).toBeGreaterThanOrEqual(0.96);
+    expect(toExitDir.dot(resolved.toPlug!.direction)).toBeGreaterThanOrEqual(0.96);
+
+    // 2. Interior angles immediately outside BOTH connector boots are smoothly open (>= 135°, no sharp kink)
+    const angleAt = (idx: number) => {
+      const va = new Vector3().subVectors(pts[idx - 1], pts[idx]).normalize();
+      const vb = new Vector3().subVectors(pts[idx + 1], pts[idx]).normalize();
+      return (Math.acos(Math.max(-1, Math.min(1, va.dot(vb)))) * 180) / Math.PI;
+    };
+    expect(angleAt(1)).toBeGreaterThanOrEqual(135);
+    expect(angleAt(pts.length - 2)).toBeGreaterThanOrEqual(135);
+  });
 });

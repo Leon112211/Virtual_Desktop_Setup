@@ -122,7 +122,8 @@ export function minCableInteriorAngleDeg(points: readonly Vector3[]): number {
 
 /**
  * Enforces bending resilience so consecutive segments never fold into an acute angle (< 90°).
- * Smoothly curves tight kinks across neighboring unpinned nodes and guards port strain-relief boots.
+ * Smoothly curves tight kinks across neighboring unpinned nodes and applies progressive
+ * high-resilience strain-relief reinforcement symmetrically near both cable ends.
  */
 export function relaxNonAcuteBends(
   nodes: Vector3[],
@@ -133,12 +134,67 @@ export function relaxNonAcuteBends(
   holes: CableHole[],
   allowedItemIds: Set<string>,
   passes = 10,
+  cableRadius = 0.004,
 ): boolean {
   const n = nodes.length;
   if (n < 3) return false;
   let adjusted = false;
-  const targetDeg = Math.max(96, Math.min(148, minInteriorDeg));
-  const cosLimit = Math.cos((targetDeg * Math.PI) / 180); // negative for > 90°
+  const baseTargetDeg = Math.max(96, Math.min(148, minInteriorDeg));
+  const hasStartStub = pinned[0] && pinned[1];
+  const hasEndStub = pinned[n - 1] && pinned[n - 2];
+
+  const guardPinnedExit = (
+    pivotIdx: number,
+    refIdx: number,
+    freeIdx: number,
+    localCosLimit: number,
+  ) => {
+    _delta.copy(nodes[pivotIdx]).sub(nodes[refIdx]);
+    const dirLen = _delta.length();
+    if (dirLen <= 1e-5) return;
+    _delta.divideScalar(dirLen);
+    const outVec = new Vector3().subVectors(nodes[freeIdx], nodes[pivotIdx]);
+    const outLen = outVec.length();
+    if (outLen <= 1e-5) return;
+    const preY = nodes[freeIdx].y;
+    const forwardProj = outVec.dot(_delta);
+    // Target cone aligned along coaxial strain-relief exit direction while strictly preserving segment length `outLen`
+    const minForward = Math.max(0.015, outLen * Math.min(0.95, -localCosLimit * 0.96));
+    if (forwardProj < minForward) {
+      const blended = outVec.clone().addScaledVector(_delta, (minForward - forwardProj) * 0.85);
+      // Avoid zero-vector/180°-foldback singularity when a waypoint pulls directly opposite to `_delta`
+      if (forwardProj < -0.55 * outLen || blended.lengthSq() < 1e-6) {
+        let lx = -_delta.z;
+        let lz = _delta.x;
+        const lh = Math.hypot(lx, lz);
+        if (lh < 1e-4) {
+          lx = 1;
+          lz = 0;
+        } else {
+          lx /= lh;
+          lz /= lh;
+        }
+        blended.x += lx * outLen * 0.45;
+        blended.z += lz * outLen * 0.45;
+      }
+      if (blended.lengthSq() > 1e-8) {
+        blended.normalize().multiplyScalar(outLen);
+        const candidate = nodes[pivotIdx].clone().add(blended);
+        const clr = projectCablePointWithSupport(
+          candidate,
+          preY,
+          cableRadius,
+          solids,
+          holes,
+          allowedItemIds,
+        );
+        if (clr.point.distanceToSquared(nodes[refIdx]) > 1e-5) {
+          if (clr.adjusted) adjusted = true;
+          nodes[freeIdx].copy(clr.point);
+        }
+      }
+    }
+  };
 
   for (let pass = 0; pass < passes; pass++) {
     let changedThisPass = false;
@@ -154,23 +210,45 @@ export function relaxNonAcuteBends(
         }
         continue;
       }
+
+      // Progressive end-zone stiffness: cables exhibit much stronger bending resistance near
+      // both connector strain-relief boots (~8-10 cm transition zone) than in mid-span.
+      const distFromStart = hasStartStub ? i : 99;
+      const distFromEnd = hasEndStub ? n - 1 - i : 99;
+      const endSteps = Math.min(distFromStart, distFromEnd);
+      let localTargetDeg = baseTargetDeg;
+      let localStiffness = stiffness;
+      if (endSteps === 1) {
+        localTargetDeg = Math.max(baseTargetDeg, Math.min(164, 148 + stiffness * 18));
+        localStiffness = Math.min(1, stiffness + 0.35);
+      } else if (endSteps === 2) {
+        localTargetDeg = Math.max(baseTargetDeg, Math.min(156, 140 + stiffness * 16));
+        localStiffness = Math.min(1, stiffness + 0.25);
+      } else if (endSteps === 3) {
+        localTargetDeg = Math.max(baseTargetDeg, Math.min(146, 130 + stiffness * 14));
+        localStiffness = Math.min(1, stiffness + 0.15);
+      } else if (endSteps === 4) {
+        localTargetDeg = Math.max(baseTargetDeg, Math.min(136, 120 + stiffness * 12));
+        localStiffness = Math.min(1, stiffness + 0.08);
+      }
+      const cosLimit = Math.cos((localTargetDeg * Math.PI) / 180); // negative for > 90°
       const cos = Math.max(-1, Math.min(1, _a.dot(_b) / (la * lb)));
 
       // Fairing along adjacent vertices: straighten horizontal (XZ) runs to eliminate desktop zigzags
       // while keeping vertical (-Y) gravity catenary sag intact unless curvature exceeds angle limit
-      if (!pinned[i] && stiffness > 0.1) {
+      if (!pinned[i] && localStiffness > 0.1) {
         const w = la / (la + lb);
         _mid.lerpVectors(nodes[i - 1], nodes[i + 1], w);
-        const xzScale = Math.min(0.46, 0.2 + stiffness * 0.26);
+        const xzScale = Math.min(0.56, 0.2 + localStiffness * 0.3);
         nodes[i].x += (_mid.x - nodes[i].x) * xzScale;
         nodes[i].z += (_mid.z - nodes[i].z) * xzScale;
         if (cos > -0.985) {
-          nodes[i].y += (_mid.y - nodes[i].y) * Math.min(0.14, xzScale * 0.25);
+          nodes[i].y += (_mid.y - nodes[i].y) * Math.min(0.18, xzScale * 0.28);
         }
         const clr = projectCablePointWithSupport(
           nodes[i],
           nodes[i].y,
-          0.002,
+          cableRadius,
           solids,
           holes,
           allowedItemIds,
@@ -189,12 +267,12 @@ export function relaxNonAcuteBends(
 
       if (!pinned[i]) {
         const preBendY = nodes[i].y;
-        const pull = Math.min(0.65, 0.25 + severity * 0.42);
+        const pull = Math.min(0.68, 0.25 + severity * 0.44);
         nodes[i].lerp(_mid, pull);
         const clr = projectCablePointWithSupport(
           nodes[i],
           preBendY,
-          0.002,
+          cableRadius,
           solids,
           holes,
           allowedItemIds,
@@ -202,36 +280,24 @@ export function relaxNonAcuteBends(
         if (clr.adjusted) adjusted = true;
         nodes[i].copy(clr.point);
       } else {
-        // Guard strain-relief exit direction at pinned nodes (ports / holes)
-        _delta.copy(nodes[i]).sub(nodes[i - 1]);
-        const dirLen = _delta.length();
-        if (dirLen > 1e-5 && !pinned[i + 1]) {
-          const preNextY = nodes[i + 1].y;
-          _delta.divideScalar(dirLen);
-          const forwardProj = _b.dot(_delta);
-          const minForward = Math.max(0.015, lb * -cosLimit * 0.65);
-          if (forwardProj < minForward) {
-            nodes[i + 1].addScaledVector(_delta, (minForward - forwardProj) * 0.6);
-            const clr = projectCablePointWithSupport(
-              nodes[i + 1],
-              preNextY,
-              0.002,
-              solids,
-              holes,
-              allowedItemIds,
-            );
-            nodes[i + 1].copy(clr.point);
-          }
+        // Symmetric strain-relief exit guard at BOTH from-end and to-end pinned connector boots
+        if (!pinned[i + 1]) {
+          guardPinnedExit(i, i - 1, i + 1, cosLimit);
+        }
+        if (!pinned[i - 1]) {
+          guardPinnedExit(i, i + 1, i - 1, cosLimit);
         }
       }
 
-      // Open the outer chord between i-1 and i+1 if still tight
+      // Open the outer chord between i-1 and i+1 only for genuinely tight (< baseTargetDeg) kinks
+      // so progressive end-zone stiffening never stretches fixed-length cables past their budget
       const freePrev = !pinned[i - 1] && i - 1 > 0;
       const freeNext = !pinned[i + 1] && i + 1 < n - 1;
-      if (freePrev || freeNext) {
+      const baseCosLimit = Math.cos((baseTargetDeg * Math.PI) / 180);
+      if (cos > baseCosLimit && (freePrev || freeNext)) {
         _push.subVectors(nodes[i + 1], nodes[i - 1]);
         const chord = _push.length();
-        const minChord = Math.sqrt(Math.max(1e-6, la * la + lb * lb - 2 * la * lb * cosLimit));
+        const minChord = Math.sqrt(Math.max(1e-6, la * la + lb * lb - 2 * la * lb * baseCosLimit));
         if (chord < minChord) {
           if (chord < 0.25 * (la + lb)) {
             // Hairpin U-turn (< ~30°): open laterally orthogonal to the leg direction to form a real bend radius
@@ -502,6 +568,7 @@ export function solveStaticCablePhysics(params: SolveStaticCableParams): SolveSt
       holes,
       allowedItemIds,
       2,
+      radius,
     );
 
     // 4) Collision projection against desk/shelf/wall/items/floor while keeping hole interiors clear
@@ -553,6 +620,7 @@ export function solveStaticCablePhysics(params: SolveStaticCableParams): SolveSt
       holes,
       allowedItemIds,
       56,
+      radius,
     )
   ) {
     collisionAdjusted = true;
@@ -600,6 +668,7 @@ export function solveStaticCablePhysics(params: SolveStaticCableParams): SolveSt
         holes,
         allowedItemIds,
         4,
+        radius,
       )
     ) {
       collisionAdjusted = true;
@@ -644,6 +713,34 @@ export function solveStaticCablePhysics(params: SolveStaticCableParams): SolveSt
     );
     if (conservRes.adjusted) {
       finalPoints = conservRes.points;
+      collisionAdjusted = true;
+    }
+  }
+
+  if (finalPoints.length >= 3 && minCableInteriorAngleDeg(finalPoints) < 94) {
+    const pinnedFinal = finalPoints.map(
+      (p, idx) =>
+        idx === 0 ||
+        idx === finalPoints.length - 1 ||
+        hardRefs.some((h) => h.distanceToSquared(p) < 1e-7),
+    );
+    if (
+      relaxNonAcuteBends(
+        finalPoints,
+        pinnedFinal,
+        Math.max(100, minInteriorAngleDeg - 6),
+        stiffness,
+        solids,
+        holes,
+        allowedItemIds,
+        14,
+        radius,
+      )
+    ) {
+      finalPoints = simplifyCollinearPoints(
+        resolveSegmentClearance(finalPoints, radius, solids, holes, allowedItemIds).points,
+        hardRefs,
+      );
       collisionAdjusted = true;
     }
   }
@@ -745,8 +842,13 @@ function layoutFixedSurplusLoop(
   // 2) Device-to-device cables: choose the longest uncluttered desktop/rear span
   let bestIdx = -1;
   let bestScore = -1;
-  const startIdx = basePts.length > 4 ? 2 : 0;
-  const endIdx = basePts.length > 4 ? basePts.length - 3 : basePts.length - 2;
+  const startIdx = basePts.length > 6 ? 3 : basePts.length > 4 ? 2 : 0;
+  const endIdx =
+    basePts.length > 6
+      ? basePts.length - 4
+      : basePts.length > 4
+        ? basePts.length - 3
+        : basePts.length - 2;
   for (let i = startIdx; i <= endIdx; i++) {
     const a = basePts[i];
     const b = basePts[i + 1];
@@ -966,12 +1068,15 @@ function simplifyCollinearPoints(pts: readonly Vector3[], keepRefs: readonly Vec
     _delta.subVectors(next, prev).divideScalar(segLen);
     _a.subVectors(cur, prev);
     const proj = _a.dot(_delta);
+    const perpSq = Math.max(0, _a.lengthSq() - proj * proj);
     if (proj >= 0 && proj <= segLen) {
-      const perpSq = _a.lengthSq() - proj * proj;
       // Drop redundant collinear micro-samples (< 1.2 mm lateral deviation) so straight spans render clean
       if (perpSq < 0.0012 * 0.0012 && segLen < 0.18) {
         continue;
       }
+    } else if (perpSq < 0.0015 * 0.0015 && (proj < 0 ? -proj : proj - segLen) < 0.045) {
+      // Drop unpinned 0° collinear double-back spikes introduced by boundary snapping
+      continue;
     }
     out.push(cur.clone());
   }

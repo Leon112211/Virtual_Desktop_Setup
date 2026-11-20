@@ -193,8 +193,24 @@ export function computeCablePath(cable: Cable, project: Project): ResolvedCableP
   const holes = getSceneCableHoles(project);
   const grommetHole = holes.find((h) => h.kind === 'grommet') ?? null;
 
+  const srLeadLen = Math.max(0.024, Math.min(0.038, 0.022 + spec.bendingStiffness * 0.018));
+  const clampLeadHeight = (portPos: Vector3, lead: Vector3) => {
+    lead.y = Math.max(spec.radius + 0.002, lead.y);
+    if (
+      portPos.y >= desk.height - 0.01 &&
+      Math.abs(lead.x) <= desk.width * 0.52 &&
+      Math.abs(lead.z) <= desk.depth * 0.52
+    ) {
+      lead.y = Math.max(desk.height + spec.radius + 0.002, lead.y);
+    }
+    return lead;
+  };
+
   const startTip = fromPort.position.clone().addScaledVector(fromPort.direction, fromConnLen);
-  const startLead = startTip.clone().addScaledVector(fromPort.direction, 0.032);
+  const startLead = clampLeadHeight(
+    fromPort.position,
+    startTip.clone().addScaledVector(fromPort.direction, srLeadLen),
+  );
 
   let toPort: { position: Vector3; direction: Vector3 } | undefined;
   let toItem: SceneItem | undefined;
@@ -212,7 +228,10 @@ export function computeCablePath(cable: Cable, project: Project): ResolvedCableP
     resolvedToPlug = resolveRoutingPlugType(toItem, toEp.portId, cable.kind, cable.toPlugType);
     const toConnLen = plugConnectorLen(cable.kind, resolvedToPlug);
     endTip = toPort.position.clone().addScaledVector(toPort.direction, toConnLen);
-    endLead = endTip.clone().addScaledVector(toPort.direction, 0.032);
+    endLead = clampLeadHeight(
+      toPort.position,
+      endTip.clone().addScaledVector(toPort.direction, srLeadLen),
+    );
   }
 
   const { bodyM, bothConnectorsM } = cableEffectiveLengths({
@@ -299,8 +318,8 @@ export function computeCablePath(cable: Cable, project: Project): ResolvedCableP
   // Build hole-aware & topology-safe initial guide anchors; only physical clips, holes,
   // and plugged port boots are pinned, letting unconstrained spans settle under gravity & resilience.
   const anchors: CableGuideAnchor[] = [
-    { point: startTip, pinned: true, tangent: fromPort.direction },
-    { point: startLead, pinned: true, tangent: fromPort.direction },
+    { point: startTip, pinned: true, hardPin: true, tangent: fromPort.direction },
+    { point: startLead, pinned: true, hardPin: true, tangent: fromPort.direction },
   ];
   const wall = deskBackWallBounds(desk);
   const safeBackZ = (preferredZ: number) =>
@@ -421,8 +440,8 @@ export function computeCablePath(cable: Cable, project: Project): ResolvedCableP
     }
 
     anchors.push(
-      { point: endLead, pinned: true, tangent: toPort!.direction.clone().negate() },
-      { point: endTip, pinned: true, tangent: toPort!.direction.clone().negate() },
+      { point: endLead, pinned: true, hardPin: true, tangent: toPort!.direction.clone().negate() },
+      { point: endTip, pinned: true, hardPin: true, tangent: toPort!.direction.clone().negate() },
     );
 
     const solved = solveStaticCablePhysics({

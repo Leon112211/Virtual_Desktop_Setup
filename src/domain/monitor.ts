@@ -1,5 +1,8 @@
+// CS50x Final Project — DeskCraft
+// AI Assistance Disclosure: Developed under the author's design & domain rules with assistance from AI coding tools (see src/App.tsx & README.md).
 import { z } from 'zod';
 import type { Size } from './project';
+import { tr } from '../i18n';
 
 // Real 16:9 monitor data aligned with Dell UltraSharp U2725QE official outline dimensions:
 // 27" class head = 612.44 × 353.51 × 55.60 mm, viewable screen = 596.74 × 335.66 mm,
@@ -34,26 +37,52 @@ export type MonitorSettings = z.infer<typeof monitorSettingsSchema>;
 
 export type MonitorPresetId = '24' | '27' | '32';
 
-export const monitorPresets: { id: MonitorPresetId; label: string; size: Size }[] = [
-  { id: '24', label: '24 寸', size: { width: 0.539, height: 0.438, depth: 0.177 } },
-  { id: '27', label: '27 寸', size: { width: 0.6124, height: 0.4857, depth: 0.189 } },
-  { id: '32', label: '32 寸', size: { width: 0.7134, height: 0.5603, depth: 0.189 } },
+export const monitorPresets: { id: MonitorPresetId; readonly label: string; size: Size }[] = [
+  {
+    id: '24',
+    get label() {
+      return tr('24 寸', '24"');
+    },
+    size: { width: 0.539, height: 0.438, depth: 0.177 },
+  },
+  {
+    id: '27',
+    get label() {
+      return tr('27 寸', '27"');
+    },
+    size: { width: 0.6124, height: 0.4857, depth: 0.189 },
+  },
+  {
+    id: '32',
+    get label() {
+      return tr('32 寸', '32"');
+    },
+    size: { width: 0.7134, height: 0.5603, depth: 0.189 },
+  },
 ];
 
 export const STUDIO_DISPLAY_SILVER = '#dfe2e7';
 export const STUDIO_DISPLAY_PRESETS: Record<
   StudioStandType,
-  { label: string; shortLabel: string; weightKg: number; size: Size }
+  { readonly label: string; readonly shortLabel: string; weightKg: number; size: Size }
 > = {
   tilt: {
-    label: '可调倾角支架（官方标准）',
-    shortLabel: '可调倾角支架',
+    get label() {
+      return tr('可调倾角支架（标准）', 'Tilt-Adjustable Stand');
+    },
+    get shortLabel() {
+      return tr('可调倾角支架', 'Tilt Stand');
+    },
     weightKg: 6.3,
     size: { width: 0.623, height: 0.478, depth: 0.168 },
   },
   height: {
-    label: '可调倾角及高度支架（+10.5 cm 升降）',
-    shortLabel: '倾角及高度支架',
+    get label() {
+      return tr('可调倾角及高度支架（+10.5 cm 升降）', 'Tilt & Height Stand (+10.5 cm)');
+    },
+    get shortLabel() {
+      return tr('倾角及高度支架', 'Tilt & Height Stand');
+    },
     weightKg: 7.7,
     size: { width: 0.623, height: 0.479, depth: 0.207 },
   },
@@ -211,7 +240,7 @@ export function monitorBaseTier(size: Size, settings?: MonitorSettings): Monitor
     if (settings.standType === 'height') {
       return {
         id: 'medium',
-        label: 'Apple 升降支架底座 (22.5 × 20.7 cm)',
+        label: tr('一体升降支架底座 (22.5 × 20.7 cm)', 'Height-Stand Base (22.5 × 20.7 cm)'),
         baseWidth: 0.225,
         baseDepth: 0.207,
         columnWidth: 0.11,
@@ -219,7 +248,7 @@ export function monitorBaseTier(size: Size, settings?: MonitorSettings): Monitor
     }
     return {
       id: 'compact',
-      label: 'Apple 倾角支架底座 (22.0 × 16.8 cm)',
+      label: tr('一体倾角支架底座 (22.0 × 16.8 cm)', 'Tilt-Stand Base (22.0 × 16.8 cm)'),
       baseWidth: 0.22,
       baseDepth: 0.168,
       columnWidth: 0.108,
@@ -229,7 +258,7 @@ export function monitorBaseTier(size: Size, settings?: MonitorSettings): Monitor
   if (inches < 26.8) {
     return {
       id: 'compact',
-      label: '< 27 寸标准底座 (25.0 × 17.7 cm)',
+      label: tr('< 27 寸标准底座 (25.0 × 17.7 cm)', '< 27" Compact Base (25.0 × 17.7 cm)'),
       baseWidth: 0.25,
       baseDepth: 0.177,
       columnWidth: 0.048,
@@ -238,7 +267,7 @@ export function monitorBaseTier(size: Size, settings?: MonitorSettings): Monitor
   if (inches <= 32.2) {
     return {
       id: 'medium',
-      label: '27–32 寸标准底座 (27.3 × 18.9 cm)',
+      label: tr('27–32 寸标准底座 (27.3 × 18.9 cm)', '27–32" Standard Base (27.3 × 18.9 cm)'),
       baseWidth: 0.2728,
       baseDepth: 0.189,
       columnWidth: 0.054,
@@ -246,7 +275,7 @@ export function monitorBaseTier(size: Size, settings?: MonitorSettings): Monitor
   }
   return {
     id: 'large',
-    label: '> 32 寸大号加重底座 (30.0 × 23.0 cm)',
+    label: tr('> 32 寸大号加重底座 (30.0 × 23.0 cm)', '> 32" Heavy Base (30.0 × 23.0 cm)'),
     baseWidth: 0.3,
     baseDepth: 0.23,
     columnWidth: 0.058,

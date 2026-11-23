@@ -1,13 +1,22 @@
+// CS50x Final Project — DeskCraft
+// AI Assistance Disclosure: Developed under the author's design & domain rules with assistance from AI coding tools (see src/App.tsx & README.md).
 import { z } from 'zod';
+import { tr } from '../i18n';
 
 export const powerOutletTypeValues = ['combo5', 'twoPin', 'threePin'] as const;
 export const powerOutletTypeSchema = z.enum(powerOutletTypeValues);
 export type PowerOutletType = z.infer<typeof powerOutletTypeSchema>;
 
 export const POWER_OUTLET_LABELS: Record<PowerOutletType, string> = {
-  combo5: '5 孔组合（2+3孔）',
-  twoPin: '仅双孔（2脚）',
-  threePin: '仅三孔（3脚）',
+  get combo5() {
+    return tr('5 孔组合（2+3孔）', '5-Hole Combo (2+3 Pin)');
+  },
+  get twoPin() {
+    return tr('仅双孔（2脚）', '2-Pin Only');
+  },
+  get threePin() {
+    return tr('仅三孔（3脚）', '3-Pin Grounded');
+  },
 };
 
 export const powerStripLayoutValues = ['1x3', '1x4', '1x5', '1x6', '2x3', '2x4'] as const;
@@ -16,15 +25,53 @@ export type PowerStripLayout = z.infer<typeof powerStripLayoutSchema>;
 
 export const POWER_STRIP_LAYOUT_META: Record<
   PowerStripLayout,
-  { label: string; rows: 1 | 2; cols: number }
+  { readonly label: string; rows: 1 | 2; cols: number }
 > = {
-  '1x3': { label: '1×3 位', rows: 1, cols: 3 },
-  '1x4': { label: '1×4 位', rows: 1, cols: 4 },
-  '1x5': { label: '1×5 位', rows: 1, cols: 5 },
-  '1x6': { label: '1×6 位', rows: 1, cols: 6 },
-  '2x3': { label: '2×3 位', rows: 2, cols: 3 },
-  '2x4': { label: '2×4 位', rows: 2, cols: 4 },
+  '1x3': {
+    get label() {
+      return tr('1×3 位', '1×3 Gang');
+    },
+    rows: 1,
+    cols: 3,
+  },
+  '1x4': {
+    get label() {
+      return tr('1×4 位', '1×4 Gang');
+    },
+    rows: 1,
+    cols: 4,
+  },
+  '1x5': {
+    get label() {
+      return tr('1×5 位', '1×5 Gang');
+    },
+    rows: 1,
+    cols: 5,
+  },
+  '1x6': {
+    get label() {
+      return tr('1×6 位', '1×6 Gang');
+    },
+    rows: 1,
+    cols: 6,
+  },
+  '2x3': {
+    get label() {
+      return tr('2×3 位', '2×3 Gang');
+    },
+    rows: 2,
+    cols: 3,
+  },
+  '2x4': {
+    get label() {
+      return tr('2×4 位', '2×4 Gang');
+    },
+    rows: 2,
+    cols: 4,
+  },
 };
+
+export const POWER_STRIP_CORD_LENGTHS = [1.2, 1.5, 1.8, 2, 3, 5] as const;
 
 export const powerStripSettingsSchema = z.object({
   layout: powerStripLayoutSchema,
@@ -32,6 +79,7 @@ export const powerStripSettingsSchema = z.object({
   usbA: z.number().int().min(0).max(4),
   usbC: z.number().int().min(0).max(4),
   masterSwitch: z.boolean(),
+  cordLengthM: z.number().finite().min(0.5).max(10).optional(),
 });
 export type PowerStripSettings = z.infer<typeof powerStripSettingsSchema>;
 
@@ -63,20 +111,114 @@ export type PlugSpecKind = z.infer<typeof plugSpecSchema>;
 
 export const PLUG_SPEC_META: Record<
   PlugSpecKind,
-  { label: string; shortLabel: string; depthM: number }
+  { readonly label: string; readonly shortLabel: string; depthM: number }
 > = {
-  cn3Pin: { label: '国标三脚插头 (10A)', shortLabel: '国标三插', depthM: 0.024 },
-  cn2Pin: { label: '国标两脚扁插头', shortLabel: '国标两插', depthM: 0.021 },
-  rightAngle: { label: '90° 超薄直角弯头', shortLabel: '90°弯头', depthM: 0.011 },
-  ganAdapter: { label: '氮化镓 (GaN) 快充头（额外配件）', shortLabel: 'GaN快充头', depthM: 0.048 },
-  appleDuckhead: { label: '苹果官方方形快充头（额外配件）', shortLabel: '苹果方头', depthM: 0.029 },
-  iecC13: { label: 'IEC C13 品字尾插头', shortLabel: '品字尾', depthM: 0.032 },
-  dp: { label: 'DisplayPort (DP) 接头', shortLabel: 'DP接头', depthM: 0.042 },
-  usbc: { label: 'USB-C / Type-C 接头', shortLabel: 'Type-C接头', depthM: 0.028 },
-  usba: { label: 'USB-A 方口接头', shortLabel: 'USB-A接头', depthM: 0.032 },
+  cn3Pin: {
+    get label() {
+      return tr('标准三脚插头 (10A)', '3-Pin Grounded Plug (10A)');
+    },
+    get shortLabel() {
+      return tr('三脚插头', '3-Pin Plug');
+    },
+    depthM: 0.024,
+  },
+  cn2Pin: {
+    get label() {
+      return tr('标准两脚扁插头', '2-Pin Flat Plug');
+    },
+    get shortLabel() {
+      return tr('两脚插头', '2-Pin Plug');
+    },
+    depthM: 0.021,
+  },
+  rightAngle: {
+    get label() {
+      return tr('90° 超薄直角弯头', '90° Low-Profile Plug');
+    },
+    get shortLabel() {
+      return tr('90°弯头', '90° Plug');
+    },
+    depthM: 0.011,
+  },
+  ganAdapter: {
+    get label() {
+      return tr('氮化镓 (GaN) 快充头（额外配件）', 'GaN Fast Charger (Add-on)');
+    },
+    get shortLabel() {
+      return tr('GaN快充头', 'GaN Charger');
+    },
+    depthM: 0.064,
+  },
+  appleDuckhead: {
+    get label() {
+      return tr('方形快充电源头（额外配件）', 'Square Power Adapter (Add-on)');
+    },
+    get shortLabel() {
+      return tr('方形快充头', 'Square Charger');
+    },
+    depthM: 0.042,
+  },
+  iecC13: {
+    get label() {
+      return tr('IEC C13 品字尾插头', 'IEC C13 Coupler');
+    },
+    get shortLabel() {
+      return tr('品字尾', 'IEC C13');
+    },
+    depthM: 0.032,
+  },
+  dp: {
+    get label() {
+      return tr('DisplayPort (DP) 接头', 'DisplayPort (DP) Plug');
+    },
+    get shortLabel() {
+      return tr('DP接头', 'DP Plug');
+    },
+    depthM: 0.042,
+  },
+  usbc: {
+    get label() {
+      return tr('USB-C / Type-C 接头', 'USB-C / Type-C Plug');
+    },
+    get shortLabel() {
+      return tr('Type-C接头', 'Type-C Plug');
+    },
+    depthM: 0.028,
+  },
+  usba: {
+    get label() {
+      return tr('USB-A 方口接头', 'USB-A Plug');
+    },
+    get shortLabel() {
+      return tr('USB-A接头', 'USB-A Plug');
+    },
+    depthM: 0.032,
+  },
 };
 
 export const WALL_OUTLET_DEFAULT_Y = 0.32;
+
+export function isAcWallPlugKind(plug?: PlugSpecKind): boolean {
+  return (
+    plug === 'cn3Pin' ||
+    plug === 'cn2Pin' ||
+    plug === 'rightAngle' ||
+    plug === 'ganAdapter' ||
+    plug === 'appleDuckhead'
+  );
+}
+
+export function isTwoPinAcPlug(plug?: PlugSpecKind): boolean {
+  return plug === 'cn2Pin' || plug === 'ganAdapter' || plug === 'appleDuckhead';
+}
+
+export function canAcPlugFitOutlet(
+  plug: PlugSpecKind | undefined,
+  outletType: PowerOutletType,
+): boolean {
+  if (!plug || outletType === 'combo5') return true;
+  return outletType === 'twoPin' ? isTwoPinAcPlug(plug) : !isTwoPinAcPlug(plug);
+}
 
 export function defaultPowerStripSettings(): PowerStripSettings {
   return {
@@ -85,6 +227,7 @@ export function defaultPowerStripSettings(): PowerStripSettings {
     usbA: 2,
     usbC: 1,
     masterSwitch: true,
+    cordLengthM: 1.8,
   };
 }
 
@@ -160,7 +303,9 @@ export function computePowerStripUsbPorts(cfg: PowerStripSettings): LocalUsbPort
     const z = twoRows ? (i % 2 === 0 ? -0.015 : 0.015) : 0;
     ports.push({
       id: `${isC ? 'usbc' : 'usba'}-${typeIdx + 1}`,
-      label: isC ? `Type-C 快充口 ${typeIdx + 1}` : `USB-A 口 ${typeIdx + 1}`,
+      label: isC
+        ? tr(`Type-C 快充口 ${typeIdx + 1}`, `Type-C PD ${typeIdx + 1}`)
+        : tr(`USB-A 口 ${typeIdx + 1}`, `USB-A ${typeIdx + 1}`),
       type: isC ? 'usbc' : 'usba',
       x: usbBaseX + colIdx * 0.017,
       y: height,
@@ -182,7 +327,7 @@ export function computeWallOutletUsbPorts(cfg: WallOutletSettings): LocalUsbPort
     const frac = (i + 1) / (totalUsb + 1);
     ports.push({
       id: `usba-${i + 1}`,
-      label: `USB-A 口 ${i + 1}`,
+      label: tr(`USB-A 口 ${i + 1}`, `USB-A ${i + 1}`),
       type: 'usba',
       x: ux,
       y: cfg.mount === 'floor' ? height : height * (1 - frac * 0.65 - 0.175),
@@ -206,7 +351,7 @@ export function computePowerStripSlots(cfg: PowerStripSettings): LocalSocketSlot
     for (let c = 0; c < cols; c++) {
       slots.push({
         id: `slot-${idx}`,
-        label: `AC 插孔 ${idx}`,
+        label: tr(`AC 插孔 ${idx}`, `AC Outlet ${idx}`),
         kind: 'power',
         x: acStartX + c * pitch,
         y: height,
@@ -238,7 +383,7 @@ export function computeWallOutletSlots(cfg: WallOutletSettings): LocalSocketSlot
   return [
     {
       id: 'slot-1',
-      label: '插座孔位 1',
+      label: tr('插座孔位 1', 'Socket 1'),
       kind: 'power',
       x: cx,
       y: cfg.mount === 'floor' ? height : height / 2,

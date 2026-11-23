@@ -1,5 +1,8 @@
+// CS50x Final Project — DeskCraft
+// AI Assistance Disclosure: Developed under the author's design & domain rules with assistance from AI coding tools (see src/App.tsx & README.md).
 import { z } from 'zod';
 import type { Size } from './project';
+import { tr } from '../i18n';
 
 export const keyboardLayouts = ['60', '65', '75', '80', '98', '100'] as const;
 export type KeyboardLayout = (typeof keyboardLayouts)[number];
@@ -15,7 +18,7 @@ export type KeyDef = {
 
 export type KeyboardLayoutSpec = {
   id: KeyboardLayout;
-  label: string;
+  readonly label: string;
   shortLabel: string;
   keysCount: number;
   size: Size;
@@ -26,7 +29,9 @@ export type KeyboardLayoutSpec = {
 export const KEYBOARD_LAYOUT_SPECS: Record<KeyboardLayout, KeyboardLayoutSpec> = {
   '60': {
     id: '60',
-    label: '60% 紧凑 (61键)',
+    get label() {
+      return tr('60% 紧凑 (61键)', '60% Compact (61 Keys)');
+    },
     shortLabel: '60%',
     keysCount: 61,
     size: { width: 0.296, height: 0.034, depth: 0.106 },
@@ -35,7 +40,9 @@ export const KEYBOARD_LAYOUT_SPECS: Record<KeyboardLayout, KeyboardLayoutSpec> =
   },
   '65': {
     id: '65',
-    label: '65% 带方向 (68键)',
+    get label() {
+      return tr('65% 带方向 (68键)', '65% Arrows (68 Keys)');
+    },
     shortLabel: '65%',
     keysCount: 68,
     size: { width: 0.315, height: 0.034, depth: 0.106 },
@@ -44,7 +51,9 @@ export const KEYBOARD_LAYOUT_SPECS: Record<KeyboardLayout, KeyboardLayoutSpec> =
   },
   '75': {
     id: '75',
-    label: '75% 紧凑 (84键)',
+    get label() {
+      return tr('75% 紧凑 (84键)', '75% Compact (84 Keys)');
+    },
     shortLabel: '75%',
     keysCount: 84,
     size: { width: 0.324, height: 0.036, depth: 0.134 },
@@ -53,7 +62,9 @@ export const KEYBOARD_LAYOUT_SPECS: Record<KeyboardLayout, KeyboardLayoutSpec> =
   },
   '80': {
     id: '80',
-    label: '80% TKL (87键)',
+    get label() {
+      return tr('80% TKL (87键)', '80% TKL (87 Keys)');
+    },
     shortLabel: '80% TKL',
     keysCount: 87,
     size: { width: 0.36, height: 0.035, depth: 0.13 },
@@ -62,7 +73,9 @@ export const KEYBOARD_LAYOUT_SPECS: Record<KeyboardLayout, KeyboardLayoutSpec> =
   },
   '98': {
     id: '98',
-    label: '98% 紧凑全键 (98键)',
+    get label() {
+      return tr('98% 紧凑全键 (98键)', '98% Full-Compact (98 Keys)');
+    },
     shortLabel: '98%',
     keysCount: 98,
     size: { width: 0.388, height: 0.036, depth: 0.138 },
@@ -71,7 +84,9 @@ export const KEYBOARD_LAYOUT_SPECS: Record<KeyboardLayout, KeyboardLayoutSpec> =
   },
   '100': {
     id: '100',
-    label: '100% 全尺寸 (104键)',
+    get label() {
+      return tr('100% 全尺寸 (104键)', '100% Full-Size (104 Keys)');
+    },
     shortLabel: '100%',
     keysCount: 104,
     size: { width: 0.44, height: 0.036, depth: 0.136 },
@@ -83,9 +98,22 @@ export const KEYBOARD_LAYOUT_SPECS: Record<KeyboardLayout, KeyboardLayoutSpec> =
 export const keyboardThemes = ['white', 'black'] as const;
 export type KeyboardTheme = (typeof keyboardThemes)[number];
 
-export const KEYBOARD_THEME_SPECS: Record<KeyboardTheme, { label: string; chassisHex: string }> = {
-  white: { label: '纯白', chassisHex: '#f4f6f9' },
-  black: { label: '纯黑', chassisHex: '#181a20' },
+export const KEYBOARD_THEME_SPECS: Record<
+  KeyboardTheme,
+  { readonly label: string; chassisHex: string }
+> = {
+  white: {
+    get label() {
+      return tr('纯白', 'Pure White');
+    },
+    chassisHex: '#f4f6f9',
+  },
+  black: {
+    get label() {
+      return tr('纯黑', 'Pure Black');
+    },
+    chassisHex: '#181a20',
+  },
 };
 
 export const keyboardRgbModes = ['rainbow', 'aurora', 'static', 'breathing'] as const;

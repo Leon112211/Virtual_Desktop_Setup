@@ -1,3 +1,5 @@
+// CS50x Final Project — DeskCraft
+// AI Assistance Disclosure: Developed under the author's design & domain rules with assistance from AI coding tools (see src/App.tsx & README.md).
 import { z } from 'zod';
 import { cableSchema, MAX_CABLES } from './cable';
 import {
@@ -286,7 +288,7 @@ export const itemSchema = z
     if (i.kind === 'macbook' && !isOfficialMacbookSpec(i.size, i.color)) {
       ctx.addIssue({
         code: 'custom',
-        message: 'MacBook 仅支持苹果官方公布的机型尺寸与对应配色',
+        message: '轻薄笔记本仅支持标准预设机型尺寸与对应配色',
       });
     }
     if (i.kind === 'gamingLaptop' && !isOfficialGamingLaptopSpec(i.size)) {

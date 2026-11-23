@@ -1,3 +1,5 @@
+// CS50x Final Project — DeskCraft
+// AI Assistance Disclosure: Developed under the author's design & domain rules with assistance from AI coding tools (see src/App.tsx & README.md).
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { useThree, type ThreeEvent } from '@react-three/fiber';
 import { Group, Plane, Raycaster, Vector2, Vector3 } from 'three';
@@ -28,6 +30,7 @@ import { pauseOrbitUntilPointerUp } from './orbitPause';
 import { useEditor } from '../store/editorStore';
 import { loadCachedModel, modelCache } from '../assets/modelCache';
 import type { LoadedModel } from '../assets/importModel';
+import { tr, translateObstacleLabel } from '../i18n';
 export function SceneItem({
   item,
   selected,
@@ -55,6 +58,7 @@ export function SceneItem({
   lampSelected?: boolean;
   hasMonitorArm?: boolean;
 }) {
+  const wiringMode = useEditor((s) => s.wiringMode);
   const ref = useRef<Group>(null),
     cleanup = useRef<null | (() => void)>(null);
   const { camera, gl, invalidate } = useThree();
@@ -75,7 +79,12 @@ export function SceneItem({
       })
       .catch((e) => {
         if (active)
-          onError(`“${item.name}”无法加载：${e instanceof Error ? e.message : '模型损坏'}`);
+          onError(
+            tr(
+              `“${item.name}”无法加载：${e instanceof Error ? e.message : '模型损坏'}`,
+              `Failed to load "${item.name}": ${e instanceof Error ? e.message : 'Corrupted model'}`,
+            ),
+          );
       });
     return () => {
       active = false;
@@ -120,8 +129,8 @@ export function SceneItem({
       return;
     }
     // Once selected (woken by right-click or scene panel), left-click drags/manipulates it;
-    // when NOT selected, left-click passes straight through to OrbitControls so camera rotates cleanly.
-    if (e.button !== 0 || !selected) return;
+    // when NOT selected or during 3D port wiring, left-click passes straight through cleanly.
+    if (e.button !== 0 || !selected || useEditor.getState().wiringMode) return;
     e.stopPropagation();
     if (isBoundLaptop) return;
     const group = ref.current,
@@ -213,11 +222,17 @@ export function SceneItem({
             .getState()
             .setCollisionNotice(
               tetheredWallHit
-                ? `已达固定线缆长度极限（${(tetheredWall?.maxTotalM ?? tetheredWallHit.lengthM ?? 1).toFixed(2)} m）：线缆不可拉伸`
+                ? tr(
+                    `已达固定线缆长度极限（${(tetheredWall?.maxTotalM ?? tetheredWallHit.lengthM ?? 1).toFixed(2)} m）：线缆不可拉伸`,
+                    `Fixed cable length limit reached (${(tetheredWall?.maxTotalM ?? tetheredWallHit.lengthM ?? 1).toFixed(2)} m): cable cannot stretch`,
+                  )
                 : resolved.hitObstacle
-                  ? `已防穿模避让：${resolved.hitObstacle}`
+                  ? tr(
+                      `已防穿模避让：${resolved.hitObstacle}`,
+                      `Anti-clipping clearance: ${translateObstacleLabel(resolved.hitObstacle, 'en')}`,
+                    )
                   : snapped.snapped
-                    ? '已吸附对齐相邻插座'
+                    ? tr('已吸附对齐相邻插座', 'Snapped flush to adjacent outlet')
                     : null,
             );
           useEditor
@@ -257,7 +272,10 @@ export function SceneItem({
             useEditor
               .getState()
               .setCollisionNotice(
-                `已达固定线缆长度极限（${(tetheredArm?.maxTotalM ?? tetheredArmHit.lengthM ?? 1).toFixed(2)} m）：线缆不可拉伸`,
+                tr(
+                  `已达固定线缆长度极限（${(tetheredArm?.maxTotalM ?? tetheredArmHit.lengthM ?? 1).toFixed(2)} m）：线缆不可拉伸`,
+                  `Fixed cable length limit reached (${(tetheredArm?.maxTotalM ?? tetheredArmHit.lengthM ?? 1).toFixed(2)} m): cable cannot stretch`,
+                ),
               );
           }
           useEditor.getState().setDragPreview({
@@ -298,11 +316,17 @@ export function SceneItem({
             .getState()
             .setCollisionNotice(
               tetheredHit
-                ? `已达固定线缆长度极限（${(tethered?.maxTotalM ?? tetheredHit.lengthM ?? 1).toFixed(2)} m）：线缆不可拉伸`
+                ? tr(
+                    `已达固定线缆长度极限（${(tethered?.maxTotalM ?? tetheredHit.lengthM ?? 1).toFixed(2)} m）：线缆不可拉伸`,
+                    `Fixed cable length limit reached (${(tethered?.maxTotalM ?? tetheredHit.lengthM ?? 1).toFixed(2)} m): cable cannot stretch`,
+                  )
                 : resolved.hitObstacle
-                  ? `已防穿模避让：${resolved.hitObstacle}`
+                  ? tr(
+                      `已防穿模避让：${resolved.hitObstacle}`,
+                      `Anti-clipping clearance: ${translateObstacleLabel(resolved.hitObstacle, 'en')}`,
+                    )
                   : snapped.snapped
-                    ? '已吸附对齐相邻插座'
+                    ? tr('已吸附对齐相邻插座', 'Snapped flush to adjacent outlet')
                     : null,
             );
           useEditor.getState().setDragPreview({ id: item.id, x: latestX, z: latestZ });
@@ -342,7 +366,7 @@ export function SceneItem({
           group.position.set(startX, localY, startZ);
           useEditor.getState().setDragPreview(null);
           useEditor.getState().setCollisionNotice(null);
-          onError(err instanceof Error ? err.message : '操作未成功');
+          onError(err instanceof Error ? err.message : tr('操作未成功', 'Operation failed'));
         }
       } else {
         useEditor.getState().setCollisionNotice(null);
@@ -495,7 +519,7 @@ export function SceneItem({
           </mesh>
         </group>
       )}
-      {selected && !isWallMounted && !isVerticalBoundLaptop && (
+      {selected && !wiringMode && !isWallMounted && !isVerticalBoundLaptop && (
         <ItemRotateGizmo
           item={item}
           centerX={transform.position[0]}

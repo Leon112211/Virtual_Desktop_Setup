@@ -1,3 +1,5 @@
+// CS50x Final Project — DeskCraft
+// AI Assistance Disclosure: Developed under the author's design & domain rules with assistance from AI coding tools (see src/App.tsx & README.md).
 import { Matrix4, Vector3 } from 'three';
 import { deskBounds, deskCentroid } from '../domain/desk';
 import type { Desk } from '../domain/project';

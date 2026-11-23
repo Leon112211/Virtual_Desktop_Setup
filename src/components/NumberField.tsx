@@ -1,5 +1,8 @@
+// CS50x Final Project — DeskCraft
+// AI Assistance Disclosure: Developed under the author's design & domain rules with assistance from AI coding tools (see src/App.tsx & README.md).
 import { useEffect, useRef, useState } from 'react';
 import { useEditor } from '../store/editorStore';
+import { useI18n } from '../i18n';
 
 export function NumberField({
   label,
@@ -18,6 +21,7 @@ export function NumberField({
   unit?: string;
   onChange: (value: number) => void;
 }) {
+  const lang = useI18n((s) => s.lang);
   const [draft, setDraft] = useState(String(value));
   const [error, setError] = useState(false);
   const cancelled = useRef(false);
@@ -72,7 +76,11 @@ export function NumberField({
         <input
           type="number"
           aria-label={label}
-          aria-description={`单位 ${unit}，范围 ${min} 到 ${max}`}
+          aria-description={
+            lang === 'en'
+              ? `Unit ${unit}, range ${min} to ${max}`
+              : `单位 ${unit}，范围 ${min} 到 ${max}`
+          }
           value={draft}
           min={min}
           max={max}
@@ -95,7 +103,7 @@ export function NumberField({
       <input
         type="range"
         className="number-slider"
-        aria-label={`${label} 滑块`}
+        aria-label={lang === 'en' ? `${label} slider` : `${label} 滑块`}
         value={value}
         min={min}
         max={max}

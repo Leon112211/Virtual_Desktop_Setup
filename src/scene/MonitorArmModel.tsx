@@ -1,3 +1,5 @@
+// CS50x Final Project — DeskCraft
+// AI Assistance Disclosure: Developed under the author's design & domain rules with assistance from AI coding tools (see src/App.tsx & README.md).
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { RoundedBox } from '@react-three/drei';
 import { useThree, type ThreeEvent } from '@react-three/fiber';
@@ -29,6 +31,7 @@ import type { Desk, SceneItem } from '../domain/project';
 import { useEditor } from '../store/editorStore';
 import { LaptopTrayModel } from './LaptopTrayModel';
 import { pauseOrbitUntilPointerUp } from './orbitPause';
+import { tr } from '../i18n';
 
 const Z_AXIS = new Vector3(0, 0, 1);
 const Y_AXIS = new Vector3(0, 1, 0);
@@ -87,30 +90,12 @@ function CastArmWithCableChannel({
         </mesh>
       )}
 
-      {/* 上臂专属细节：顶部气压阻尼观察窗 + 侧面黄底 NB 圆形铭牌 */}
+      {/* 上臂专属细节：顶部气压阻尼观察窗 */}
       {isUpper && (
-        <>
-          <mesh position={[0, height / 2 + 0.0004, bodyLen * 0.24]}>
-            <boxGeometry args={[width * 0.42, 0.0018, 0.024]} />
-            <meshStandardMaterial color="#181c24" roughness={0.5} />
-          </mesh>
-          {[-1, 1].map((sideSign) => (
-            <group
-              key={`badge-${sideSign}`}
-              position={[sideSign * (width / 2 + 0.0008), height * 0.08, bodyLen * 0.28]}
-              rotation={[0, 0, (sideSign * Math.PI) / 2]}
-            >
-              <mesh>
-                <cylinderGeometry args={[0.0085, 0.0085, 0.0012, 16]} />
-                <meshStandardMaterial color="#eeb81b" roughness={0.32} />
-              </mesh>
-              <mesh position={[0, 0.0007, 0]}>
-                <cylinderGeometry args={[0.0032, 0.0032, 0.0006, 12]} />
-                <meshStandardMaterial color="#1a1e26" roughness={0.45} />
-              </mesh>
-            </group>
-          ))}
-        </>
+        <mesh position={[0, height / 2 + 0.0004, bodyLen * 0.24]}>
+          <boxGeometry args={[width * 0.42, 0.0018, 0.024]} />
+          <meshStandardMaterial color="#181c24" roughness={0.5} />
+        </mesh>
       )}
 
       {/* 长臂底部 1:1 NB 理线结构（上臂带 4 节锯齿波浪线夹，下臂带嵌入式底盖卡槽） */}
@@ -536,7 +521,7 @@ function ArmBranch({
               );
             return state.solved;
           },
-          errorMsg: '无法水平调整机械臂肘关节',
+          errorMsg: tr('无法水平调整机械臂肘关节', 'Cannot swivel arm elbow joint'),
         };
       },
     });
@@ -609,7 +594,7 @@ function ArmBranch({
               .commit((p) => applyArmSolutionToProject(p, arm.id, branch.role, state.solved, true));
             return state.solved;
           },
-          errorMsg: '无法上下调整下长臂俯仰角度',
+          errorMsg: tr('无法上下调整下长臂俯仰角度', 'Cannot adjust lower arm pitch'),
         };
       },
     });
@@ -684,7 +669,7 @@ function ArmBranch({
               );
             return state.solved;
           },
-          errorMsg: '无法上下调整气压上臂俯仰角度',
+          errorMsg: tr('无法上下调整气压上臂俯仰角度', 'Cannot adjust upper arm pitch'),
         };
       },
     });
@@ -711,7 +696,10 @@ function ArmBranch({
   return (
     <group>
       {/* NB F80/F160 紧凑微喇双阶旋转肩柱（双臂并排呈 V 型对称展开） */}
-      <group position={[branch.turretBase.x, turretMidY, branch.turretBase.z]}>
+      <group
+        position={[branch.turretBase.x, turretMidY, branch.turretBase.z]}
+        rotation={[0, branch.baseYaw, 0]}
+      >
         {/* 下段微锥旋转套筒 */}
         <mesh
           position={[0, (isInverted ? 1 : -1) * (turretHeight * 0.14), 0]}
@@ -1161,7 +1149,9 @@ export function MonitorArmModel({
           }
         } catch (err) {
           useEditor.getState().setDragPreview(null);
-          onError?.(err instanceof Error ? err.message : '无法移动机械臂底座');
+          onError?.(
+            err instanceof Error ? err.message : tr('无法移动机械臂底座', 'Cannot move arm base'),
+          );
         }
       }
     }

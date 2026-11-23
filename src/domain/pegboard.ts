@@ -1,3 +1,5 @@
+// CS50x Final Project — DeskCraft
+// AI Assistance Disclosure: Developed under the author's design & domain rules with assistance from AI coding tools (see src/App.tsx & README.md).
 // IKEA SKÅDIS pegboard hole layout, in metres.
 // The holes keep these real dimensions regardless of the board's size: a larger
 // board gains more slots rather than larger ones.

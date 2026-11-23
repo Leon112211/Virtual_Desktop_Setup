@@ -1,3 +1,5 @@
+// CS50x Final Project — DeskCraft
+// AI Assistance Disclosure: Developed under the author's design & domain rules with assistance from AI coding tools (see src/App.tsx & README.md).
 import { Euler, Matrix4, Quaternion, Vector3 } from 'three';
 import { deskBounds, deskSupportRects, grommetPosition } from './desk';
 import {
@@ -175,6 +177,8 @@ export function normalizeRotationDeg(deg: number): number {
   return Object.is(rounded, -0) ? 0 : rounded;
 }
 
+import { tr, translateObstacleLabel } from '../i18n';
+
 export function armLimitMessage(
   reason: ArmLimitReason,
   maxReachCm?: number,
@@ -183,26 +187,38 @@ export function armLimitMessage(
   switch (reason) {
     case 'maxReach':
       return maxReachCm
-        ? `已达支架臂最大伸展极限（半径 ${maxReachCm.toFixed(1)} cm）`
-        : '已达支架臂最大伸展极限';
+        ? tr(
+            `已达支架臂最大伸展极限（半径 ${maxReachCm.toFixed(1)} cm）`,
+            `Max arm reach reached (radius ${maxReachCm.toFixed(1)} cm)`,
+          )
+        : tr('已达支架臂最大伸展极限', 'Max arm reach limit reached');
     case 'minReach':
-      return '已达支架臂最小折叠间距，无法继续后压立柱';
+      return tr(
+        '已达支架臂最小折叠间距，无法继续后压立柱',
+        'Minimum arm folding clearance reached',
+      );
     case 'rearStop':
-      return '已达桌缘背侧限位';
+      return tr('已达桌缘背侧限位', 'Rear desk-edge stop reached');
     case 'heightLimit':
-      return '已达气压上臂升降机械行程极限';
+      return tr('已达气压上臂升降机械行程极限', 'Upper gas-spring vertical stroke limit reached');
     case 'lowerPitchLimit':
-      return '已达下长臂上下俯仰机械倾角极限';
+      return tr('已达下长臂上下俯仰机械倾角极限', 'Lower arm pitch limit reached');
     case 'upperPitchLimit':
-      return '已达气压上臂俯仰机械倾角极限';
+      return tr('已达气压上臂俯仰机械倾角极限', 'Upper arm pitch limit reached');
     case 'deskClearance':
       return obstacleName
-        ? `已触及「${obstacleName}」安全净空极限，无法继续下压/靠近`
-        : '已触及桌面或顶部横梁安全净空极限';
+        ? tr(
+            `已触及「${obstacleName}」安全净空极限，无法继续下压/靠近`,
+            `Clearance limit reached against "${translateObstacleLabel(obstacleName, 'en')}"`,
+          )
+        : tr('已触及桌面或顶部横梁安全净空极限', 'Desk or top crossbar clearance limit reached');
     case 'armObstacle':
       return obstacleName
-        ? `支架臂或挂载设备已触碰「${obstacleName}」（防穿模限位）`
-        : '支架臂运动轨迹受桌面物品阻挡（防穿模限位）';
+        ? tr(
+            `支架臂或挂载设备已触碰「${obstacleName}」（防穿模限位）`,
+            `Arm or mounted device collided with "${translateObstacleLabel(obstacleName, 'en')}"`,
+          )
+        : tr('支架臂运动轨迹受桌面物品阻挡（防穿模限位）', 'Arm path blocked by desk obstacle');
   }
 }
 
@@ -1732,17 +1748,14 @@ function buildBranchKinematics({
   const upperFrame = computeArmSegmentFrame(elbowPos, solvedHeadPos);
   const lowerFrame = computeArmSegmentFrame(columnTop, elbowPos);
 
-  const upperOut = elbowPos
-    .clone()
-    .lerp(solvedHeadPos, 0.82)
-    .addScaledVector(upperFrame.up, -0.024);
-  const upperIn = elbowPos.clone().lerp(solvedHeadPos, 0.18).addScaledVector(upperFrame.up, -0.024);
-  const lowerOut = columnTop.clone().lerp(elbowPos, 0.82).addScaledVector(lowerFrame.up, -0.023);
-  const lowerIn = columnTop.clone().lerp(elbowPos, 0.18).addScaledVector(lowerFrame.up, -0.023);
+  const upperOut = elbowPos.clone().lerp(solvedHeadPos, 0.82).addScaledVector(upperFrame.up, -0.02);
+  const upperIn = elbowPos.clone().lerp(solvedHeadPos, 0.18).addScaledVector(upperFrame.up, -0.02);
+  const lowerOut = columnTop.clone().lerp(elbowPos, 0.82).addScaledVector(lowerFrame.up, -0.0185);
+  const lowerIn = columnTop.clone().lerp(elbowPos, 0.18).addScaledVector(lowerFrame.up, -0.0185);
   const turretClip = columnTop
     .clone()
-    .lerp(turretBase, 0.68)
-    .add(new Vector3(-inwardX * 0.028, 0, -inwardZ * 0.028));
+    .lerp(turretBase, 0.58)
+    .add(new Vector3(-inwardX * 0.022, 0, -inwardZ * 0.022));
 
   return {
     role,

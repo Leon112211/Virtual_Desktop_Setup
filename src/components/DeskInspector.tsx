@@ -1,3 +1,5 @@
+// CS50x Final Project — DeskCraft
+// AI Assistance Disclosure: Developed under the author's design & domain rules with assistance from AI coding tools (see src/App.tsx & README.md).
 import { Cable, LayoutGrid, Layers, PanelTop, Ruler } from 'lucide-react';
 import {
   DESK_CORNER_RADIUS_PRESETS,
@@ -37,24 +39,15 @@ import {
 } from '../domain/desk';
 import { computeWallOutletSize } from '../domain/power';
 import { cm, meters, type Desk } from '../domain/project';
+import { useI18n } from '../i18n';
 import { useEditor } from '../store/editorStore';
 import { NumberField } from './NumberField';
-
-const SHAPES: { value: DeskShape; label: string }[] = [
-  { value: 'rectangle', label: '矩形' },
-  { value: 'left', label: '左侧 L 形' },
-  { value: 'right', label: '右侧 L 形' },
-];
-
-const GROMMET_SIDES: { value: GrommetSide; label: string }[] = [
-  { value: 'left', label: '左侧' },
-  { value: 'center', label: '居中' },
-  { value: 'right', label: '右侧' },
-];
 
 const WALL_COLOR_SWATCHES = ['#ebe9e2', '#dfe4ea', '#d5ddd8', '#3a414c'];
 
 function DeskTopDiagram({ desk }: { desk: Desk }) {
+  const { lang } = useI18n();
+  const t = (zh: string, en: string) => (lang === 'en' ? en : zh);
   const bounds = deskBounds(desk);
   const [main, wing] = deskSupportRects(desk);
   const outlinePts = deskOutlineRoundedPoints(desk, 6);
@@ -87,8 +80,15 @@ function DeskTopDiagram({ desk }: { desk: Desk }) {
   const cornerRadiusM = deskCornerRadius(desk);
 
   return (
-    <div className="desk-diagram" aria-label="桌面俯视尺寸示意">
-      <svg viewBox="0 0 240 164" role="img" aria-label="桌子俯视布局与坐席方向示意图">
+    <div className="desk-diagram" aria-label={t('桌面俯视尺寸示意', 'Desk Top-Down Dimensions')}>
+      <svg
+        viewBox="0 0 240 164"
+        role="img"
+        aria-label={t(
+          '桌子俯视布局与坐席方向示意图',
+          'Top-down desk layout and seating orientation',
+        )}
+      >
         <path d={shapePath} className="desk-diagram-shape" />
         {shelfRect && (
           <rect
@@ -144,7 +144,7 @@ function DeskTopDiagram({ desk }: { desk: Desk }) {
           />
         )}
         <text x={px(0)} y={pz(0) + 3} textAnchor="middle" className="desk-diagram-tag">
-          主桌
+          {t('主桌', 'Main')}
         </text>
         {wing && (
           <text
@@ -153,11 +153,15 @@ function DeskTopDiagram({ desk }: { desk: Desk }) {
             textAnchor="middle"
             className="desk-diagram-tag"
           >
-            侧翼
+            {t('侧翼', 'Wing')}
           </text>
         )}
         <text x={ox} y={pz(bounds.minZ) - 7} textAnchor="middle" className="desk-diagram-dim">
-          {wing ? `主桌宽 ${cm(desk.width)} cm` : `${cm(desk.width)} cm`}
+          {wing
+            ? lang === 'en'
+              ? `Main ${cm(desk.width)} cm`
+              : `主桌宽 ${cm(desk.width)} cm`
+            : `${cm(desk.width)} cm`}
         </text>
         <text
           x={mainDepthX}
@@ -183,32 +187,42 @@ function DeskTopDiagram({ desk }: { desk: Desk }) {
               textAnchor="middle"
               className="desk-diagram-dim"
             >
-              翼宽 {cm(desk.return.width)}
+              {lang === 'en' ? `Wing ${cm(desk.return.width)}` : `翼宽 ${cm(desk.return.width)}`}
             </text>
           </>
         )}
         <g transform={`translate(${seatX.toFixed(1)}, ${seatY.toFixed(1)})`}>
           <path d="M 0 -10 L -3 -5 M 0 -10 L 3 -5 M 0 -10 L 0 -1" className="desk-diagram-arrow" />
           <text x="0" y="9" textAnchor="middle" className="desk-diagram-seat">
-            坐席
+            {t('坐席', 'Seat')}
           </text>
         </g>
       </svg>
       <div className="desk-diagram-caption">
         {desk.return ? (
           <>
-            <span>总深度 {totalDepthCm} cm</span>
+            <span>
+              {lang === 'en' ? `Total depth ${totalDepthCm} cm` : `总深度 ${totalDepthCm} cm`}
+            </span>
             <small>
-              {cornerRadiusM > 0 ? `前角与内转角 R${cm(cornerRadiusM)} cm 倒圆角` : '直角桌角'}
+              {cornerRadiusM > 0
+                ? lang === 'en'
+                  ? `Front & inner corners R${cm(cornerRadiusM)} cm`
+                  : `前角与内转角 R${cm(cornerRadiusM)} cm 倒圆角`
+                : t('直角桌角', 'Square Corners')}
             </small>
           </>
         ) : (
           <>
             <span>
-              桌面 {cm(desk.width)} × {cm(desk.depth)} cm
+              {t('桌面', 'Desk')} {cm(desk.width)} × {cm(desk.depth)} cm
             </span>
             <small>
-              {cornerRadiusM > 0 ? `人侧前角 R${cm(cornerRadiusM)} cm 倒圆角` : '直角桌角'}
+              {cornerRadiusM > 0
+                ? lang === 'en'
+                  ? `Front corners R${cm(cornerRadiusM)} cm`
+                  : `人侧前角 R${cm(cornerRadiusM)} cm 倒圆角`
+                : t('直角桌角', 'Square Corners')}
             </small>
           </>
         )}
@@ -224,6 +238,8 @@ export default function DeskInspector({
   desk: Desk;
   onSafe: (fn: () => void) => void;
 }) {
+  const { lang } = useI18n();
+  const t = (zh: string, en: string) => (lang === 'en' ? en : zh);
   const commit = useEditor((s) => s.commit);
   const shape: DeskShape = desk.return ? desk.return.side : 'rectangle';
   const maxWingWidthCm = cm(returnWidthMax(desk.width));
@@ -232,6 +248,18 @@ export default function DeskInspector({
   const partitions = desk.partitions;
   const shelf = desk.shelf;
   const backWall = desk.backWall;
+
+  const shapes: { value: DeskShape; label: string }[] = [
+    { value: 'rectangle', label: t('矩形', 'Rectangle') },
+    { value: 'left', label: t('左侧 L 形', 'Left L-Shape') },
+    { value: 'right', label: t('右侧 L 形', 'Right L-Shape') },
+  ];
+
+  const grommetSides: { value: GrommetSide; label: string }[] = [
+    { value: 'left', label: t('左侧', 'Left') },
+    { value: 'center', label: t('居中', 'Center') },
+    { value: 'right', label: t('右侧', 'Right') },
+  ];
 
   function toggleBackWall(enabled: boolean) {
     useEditor.getState().endGesture();
@@ -302,7 +330,6 @@ export default function DeskInspector({
         };
         if (!next.back && !next.left && !next.right) {
           delete p.desk.partitions;
-          // 平行层架依附于后侧或两侧挡板存在，移除全部挡板时同步关闭层架
           delete p.desk.shelf;
         } else {
           p.desk.partitions = next;
@@ -349,10 +376,10 @@ export default function DeskInspector({
     <>
       <section className="property-section">
         <h4>
-          <LayoutGrid size={15} /> 桌型布局
+          <LayoutGrid size={15} /> {t('桌型布局', 'Desk Shape')}
         </h4>
-        <div className="desk-shape-presets" role="group" aria-label="桌型">
-          {SHAPES.map((option) => (
+        <div className="desk-shape-presets" role="group" aria-label={t('桌型', 'Desk Shape')}>
+          {shapes.map((option) => (
             <button
               key={option.value}
               type="button"
@@ -372,11 +399,20 @@ export default function DeskInspector({
           ))}
         </div>
         <p className="field-note">
-          人侧前角及 L 形内凹转角均支持倒圆角（默认 R5 cm）；左／右以坐在桌前、面向主桌为准。
+          {t(
+            '人侧前角及 L 形内凹转角均支持倒圆角（默认 R5 cm）；左／右以坐在桌前、面向主桌为准。',
+            'Front and L-shape inner corners support rounded fillets (default R5 cm); Left/Right are from the seated perspective.',
+          )}
         </p>
         <div style={{ marginTop: 10 }}>
-          <span className="field-label-small">人侧与内转角倒圆角半径</span>
-          <div className="monitor-presets" role="group" aria-label="桌角倒圆角预设">
+          <span className="field-label-small">
+            {t('人侧与内转角倒圆角半径', 'Corner Fillet Radius')}
+          </span>
+          <div
+            className="monitor-presets"
+            role="group"
+            aria-label={t('桌角倒圆角预设', 'Corner Radius Presets')}
+          >
             {DESK_CORNER_RADIUS_PRESETS.map((rM) => {
               const active = Math.abs(deskCornerRadius(desk) - rM) < 1e-4;
               return (
@@ -393,14 +429,14 @@ export default function DeskInspector({
                     )
                   }
                 >
-                  {rM === 0 ? '直角' : `R${cm(rM)}`}
+                  {rM === 0 ? t('直角', 'Square') : `R${cm(rM)}`}
                 </button>
               );
             })}
           </div>
           <div style={{ marginTop: 8 }}>
             <NumberField
-              label="倒圆角半径"
+              label={t('倒圆角半径', 'Corner Radius')}
               value={cm(deskCornerRadius(desk))}
               min={0}
               max={12}
@@ -420,11 +456,11 @@ export default function DeskInspector({
 
       <section className="property-section">
         <h4>
-          <Ruler size={15} /> 桌面尺寸
+          <Ruler size={15} /> {t('桌面尺寸', 'Desk Dimensions')}
         </h4>
         <div className="field-grid">
           <NumberField
-            label={desk.return ? '主桌宽度' : '宽度'}
+            label={desk.return ? t('主桌宽度', 'Main Width') : t('宽度', 'Width')}
             value={cm(desk.width)}
             min={60}
             max={300}
@@ -437,7 +473,7 @@ export default function DeskInspector({
             }
           />
           <NumberField
-            label={desk.return ? '主桌深度' : '深度'}
+            label={desk.return ? t('主桌深度', 'Main Depth') : t('深度', 'Depth')}
             value={cm(desk.depth)}
             min={35}
             max={150}
@@ -452,7 +488,7 @@ export default function DeskInspector({
           {desk.return && (
             <>
               <NumberField
-                label="侧翼宽度"
+                label={t('侧翼宽度', 'Wing Width')}
                 value={cm(desk.return.width)}
                 min={cm(RETURN_MIN_WIDTH)}
                 max={maxWingWidthCm}
@@ -465,7 +501,7 @@ export default function DeskInspector({
                 }
               />
               <NumberField
-                label="向前延伸"
+                label={t('向前延伸', 'Wing Extension')}
                 value={cm(desk.return.extension)}
                 min={cm(RETURN_MIN_EXTENSION)}
                 max={cm(RETURN_MAX_EXTENSION)}
@@ -480,7 +516,7 @@ export default function DeskInspector({
             </>
           )}
           <NumberField
-            label="桌面离地高度"
+            label={t('桌面离地高度', 'Desk Height')}
             value={cm(desk.height)}
             min={40}
             max={130}
@@ -493,7 +529,7 @@ export default function DeskInspector({
             }
           />
           <NumberField
-            label="桌板厚度"
+            label={t('桌板厚度', 'Top Thickness')}
             value={cm(desk.thickness)}
             min={1.5}
             max={10}
@@ -509,29 +545,38 @@ export default function DeskInspector({
         </div>
         <p className="field-note">
           {desk.return
-            ? `缩小主桌宽度时，侧翼宽度会同步缩小以保留缺口；向前延伸不包含主桌深度（总深度 ${cm(desk.depth + desk.return.extension)} cm）。高度以桌面上表面为准，桌上物品会随之移动。`
-            : '高度以桌面上表面为准，桌上物品会随之移动。'}
+            ? lang === 'en'
+              ? `Wing width scales down automatically if main width shrinks; total depth is ${cm(desk.depth + desk.return.extension)} cm. Desk height measures to the top surface.`
+              : `缩小主桌宽度时，侧翼宽度会同步缩小以保留缺口；向前延伸不包含主桌深度（总深度 ${cm(desk.depth + desk.return.extension)} cm）。高度以桌面上表面为准，桌上物品会随之移动。`
+            : t(
+                '高度以桌面上表面为准，桌上物品会随之移动。',
+                'Height is measured to the top surface; items on the desk move together.',
+              )}
         </p>
       </section>
 
       <section className="property-section">
         <h4>
-          <Cable size={15} /> 桌面走线孔
+          <Cable size={15} /> {t('桌面走线孔', 'Cable Grommet')}
         </h4>
         <label className="lamp-switch">
-          <span>开启标准走线孔</span>
+          <span>{t('开启标准走线孔', 'Enable Cable Grommet')}</span>
           <input
             type="checkbox"
             role="switch"
-            aria-label="开启标准走线孔"
+            aria-label={t('开启标准走线孔', 'Enable Cable Grommet')}
             checked={Boolean(grommet?.enabled)}
             onChange={(e) => toggleGrommet(e.target.checked)}
           />
         </label>
         {grommet?.enabled && (
           <>
-            <div className="desk-shape-presets" role="group" aria-label="走线孔位置">
-              {GROMMET_SIDES.map((opt) => (
+            <div
+              className="desk-shape-presets"
+              role="group"
+              aria-label={t('走线孔位置', 'Grommet Position')}
+            >
+              {grommetSides.map((opt) => (
                 <button
                   key={opt.value}
                   type="button"
@@ -552,7 +597,7 @@ export default function DeskInspector({
             <div
               className="desk-shape-presets"
               role="group"
-              aria-label="走线孔径"
+              aria-label={t('走线孔径', 'Grommet Diameter')}
               style={{ marginTop: 8 }}
             >
               {GROMMET_DIAMETERS.map((d) => {
@@ -578,7 +623,10 @@ export default function DeskInspector({
               })}
             </div>
             <p className="field-note">
-              默认市面标准 60 mm 护线孔，位于主桌后方，供线缆穿孔垂落桌下。
+              {t(
+                '默认标准 60 mm 护线孔，位于主桌后方，供线缆穿孔垂落桌下。',
+                'Standard 60 mm rear grommet allowing cables to pass cleanly below the desktop.',
+              )}
             </p>
           </>
         )}
@@ -586,45 +634,50 @@ export default function DeskInspector({
 
       <section className="property-section">
         <h4>
-          <PanelTop size={15} /> 工位挡板与一体层架
+          <PanelTop size={15} /> {t('工位挡板与一体层架', 'Privacy Panels & Riser Shelf')}
         </h4>
         {desk.return ? (
-          <p className="field-note">工位隔断挡板与桌体一体等宽层架仅支持矩形桌面。</p>
+          <p className="field-note">
+            {t(
+              '工位隔断挡板与桌体一体等宽层架仅支持矩形桌面。',
+              'Privacy panels and full-width riser shelf are available on rectangular desks only.',
+            )}
+          </p>
         ) : (
           <>
             <div className="desk-toggle-row">
               <label className="desk-check">
                 <input
                   type="checkbox"
-                  aria-label="后挡板"
+                  aria-label={t('后挡板', 'Back Panel')}
                   checked={Boolean(partitions?.back)}
                   onChange={(e) => updatePartition('back', e.target.checked)}
                 />
-                <span>后挡板</span>
+                <span>{t('后挡板', 'Back Panel')}</span>
               </label>
               <label className="desk-check">
                 <input
                   type="checkbox"
-                  aria-label="左侧挡板"
+                  aria-label={t('左侧挡板', 'Left Panel')}
                   checked={Boolean(partitions?.left)}
                   onChange={(e) => updatePartition('left', e.target.checked)}
                 />
-                <span>左侧挡板</span>
+                <span>{t('左侧挡板', 'Left Panel')}</span>
               </label>
               <label className="desk-check">
                 <input
                   type="checkbox"
-                  aria-label="右侧挡板"
+                  aria-label={t('右侧挡板', 'Right Panel')}
                   checked={Boolean(partitions?.right)}
                   onChange={(e) => updatePartition('right', e.target.checked)}
                 />
-                <span>右侧挡板</span>
+                <span>{t('右侧挡板', 'Right Panel')}</span>
               </label>
             </div>
             {partitions && (partitions.back || partitions.left || partitions.right) && (
               <div style={{ marginTop: 12 }}>
                 <NumberField
-                  label="挡板高度"
+                  label={t('挡板高度', 'Panel Height')}
                   value={cm(partitions.height)}
                   min={cm(PARTITION_MIN_HEIGHT)}
                   max={cm(PARTITION_MAX_HEIGHT)}
@@ -638,12 +691,18 @@ export default function DeskInspector({
                   }
                 />
                 <div style={{ marginTop: 10 }}>
-                  <span className="field-label-small">挡板材质（侧板 / 后板）</span>
-                  <div className="desk-shape-presets" role="group" aria-label="挡板材质">
+                  <span className="field-label-small">
+                    {t('挡板材质（侧板 / 后板）', 'Panel Material')}
+                  </span>
+                  <div
+                    className="desk-shape-presets"
+                    role="group"
+                    aria-label={t('挡板材质', 'Panel Material')}
+                  >
                     {(
                       [
-                        { value: 'matchDesk', label: '同桌面材质' },
-                        { value: 'frosted', label: '透明磨砂' },
+                        { value: 'matchDesk', label: t('同桌面材质', 'Match Desktop') },
+                        { value: 'frosted', label: t('透明磨砂', 'Frosted Acrylic') },
                       ] as const
                     ).map((opt) => {
                       const active = (partitions.material ?? 'matchDesk') === opt.value;
@@ -669,8 +728,14 @@ export default function DeskInspector({
                 </div>
                 <p className="field-note">
                   {partitions.material === 'frosted'
-                    ? '半透明哑光磨砂板材，保留通透采光同时兼顾桌底包边密封与底部固定卡扣。'
-                    : '材质与桌面一致，与桌体倒角及包边密封裙边一体成型，拐角连续圆角包覆。'}
+                    ? t(
+                        '半透明哑光磨砂板材，保留通透采光同时兼顾桌底包边密封与底部固定卡扣。',
+                        'Translucent frosted panels preserve ambient light while framing the desk cleanly.',
+                      )
+                    : t(
+                        '材质与桌面一致，与桌体倒角及包边密封裙边一体成型，拐角连续圆角包覆。',
+                        'Matches desktop finish seamlessly with continuous corner wrap.',
+                      )}
                 </p>
               </div>
             )}
@@ -678,12 +743,12 @@ export default function DeskInspector({
             <label className="lamp-switch" style={{ marginTop: 16 }}>
               <span>
                 <Layers size={13} style={{ verticalAlign: '-2px', marginRight: 5 }} />
-                桌体等宽平行层架
+                {t('桌体等宽平行层架', 'Full-Width Riser Shelf')}
               </span>
               <input
                 type="checkbox"
                 role="switch"
-                aria-label="桌体等宽平行层架"
+                aria-label={t('桌体等宽平行层架', 'Full-Width Riser Shelf')}
                 checked={Boolean(shelf?.enabled)}
                 onChange={(e) => toggleShelf(e.target.checked)}
               />
@@ -692,7 +757,7 @@ export default function DeskInspector({
               <>
                 <div className="field-grid">
                   <NumberField
-                    label="层架纵深"
+                    label={t('层架纵深', 'Shelf Depth')}
                     value={cm(shelf.depth)}
                     min={cm(SHELF_MIN_DEPTH)}
                     max={maxShelfDepthCm}
@@ -706,7 +771,7 @@ export default function DeskInspector({
                     }
                   />
                   <NumberField
-                    label="架面高度"
+                    label={t('架面高度', 'Shelf Height')}
                     value={cm(shelf.height)}
                     min={cm(SHELF_MIN_HEIGHT)}
                     max={cm(SHELF_MAX_HEIGHT)}
@@ -726,13 +791,9 @@ export default function DeskInspector({
                   />
                 </div>
                 <p className="field-note">
-                  {partitions?.back
-                    ? partitions.left || partitions.right
-                      ? `与主桌等宽（${cm(desk.width)} cm），材质与桌面一致并直接嵌合于后板及侧板内侧（桌底悬空无立柱）。`
-                      : `与主桌等宽（${cm(desk.width)} cm），材质与桌面一致并一体嵌合于后板内侧（桌底悬空无立柱）。`
-                    : partitions?.left && partitions?.right
-                      ? `与主桌等宽（${cm(desk.width)} cm），材质与桌面一致并一体嵌合于两侧侧板内侧（桌底悬空无立柱）。`
-                      : `与主桌等宽（${cm(desk.width)} cm），材质与桌面一致；建议开启后挡板或双侧挡板提供更稳固连接。`}
+                  {lang === 'en'
+                    ? `Spans full desk width (${cm(desk.width)} cm) in matching finish without obstructive pillars underneath.`
+                    : `与主桌等宽（${cm(desk.width)} cm），材质与桌面一致并嵌合于挡板内侧（桌底悬空无立柱）。`}
                 </p>
               </>
             )}
@@ -742,14 +803,14 @@ export default function DeskInspector({
 
       <section className="property-section">
         <h4>
-          <PanelTop size={15} /> 桌后墙面（壁挂环境）
+          <PanelTop size={15} /> {t('桌后墙面（壁挂环境）', 'Backdrop Wall')}
         </h4>
         <label className="lamp-switch">
-          <span>桌后整面墙体</span>
+          <span>{t('桌后整面墙体', 'Enable Backdrop Wall')}</span>
           <input
             type="checkbox"
             role="switch"
-            aria-label="桌后墙面"
+            aria-label={t('桌后墙面', 'Backdrop Wall')}
             checked={Boolean(backWall?.enabled)}
             onChange={(e) => toggleBackWall(e.target.checked)}
           />
@@ -758,7 +819,7 @@ export default function DeskInspector({
           <>
             <div className="field-grid" style={{ marginTop: 10 }}>
               <NumberField
-                label="墙面高出桌面"
+                label={t('墙面高出桌面', 'Height Above Desk')}
                 value={cm(backWall.height)}
                 min={cm(WALL_MIN_HEIGHT)}
                 max={cm(WALL_MAX_HEIGHT)}
@@ -772,7 +833,7 @@ export default function DeskInspector({
                 }
               />
               <NumberField
-                label="墙桌后距"
+                label={t('墙桌后距', 'Wall Gap')}
                 value={cm(backWall.gap ?? WALL_DEFAULT_GAP)}
                 min={cm(WALL_MIN_GAP)}
                 max={cm(WALL_MAX_GAP)}
@@ -790,8 +851,8 @@ export default function DeskInspector({
               {WALL_COLOR_SWATCHES.map((wc) => (
                 <button
                   key={wc}
-                  title={`墙面色 ${wc}`}
-                  aria-label={`选择墙面颜色 ${wc}`}
+                  title={`${t('墙面色', 'Wall Color')} ${wc}`}
+                  aria-label={`${t('选择墙面颜色', 'Select wall color')} ${wc}`}
                   aria-pressed={(backWall.color ?? WALL_DEFAULT_COLOR) === wc}
                   style={{ backgroundColor: wc }}
                   onClick={() =>
@@ -805,7 +866,10 @@ export default function DeskInspector({
               ))}
             </div>
             <p className="field-note">
-              开启后可在桌后直接壁挂洞洞板，并保留踢脚线与桌后理线/支架夹持间隙。
+              {t(
+                '开启后可在桌后直接壁挂洞洞板与插座，并保留踢脚线与桌后理线/支架夹持间隙。',
+                'Allows wall-mounting pegboards and outlets while preserving rear clamp & cable clearance.',
+              )}
             </p>
           </>
         )}
@@ -813,7 +877,7 @@ export default function DeskInspector({
 
       <section className="property-section">
         <h4>
-          <Cable size={15} /> 物理避障与 3D 理线约束
+          <Cable size={15} /> {t('物理避障与 3D 理线约束', 'Collision & 3D Cable Physics')}
         </h4>
         <PhysicalConstraintsPanel />
       </section>
@@ -822,21 +886,26 @@ export default function DeskInspector({
 }
 
 function PhysicalConstraintsPanel() {
+  const { lang } = useI18n();
+  const t = (zh: string, en: string) => (lang === 'en' ? en : zh);
   const { collisionEnabled, setCollisionEnabled, wiringMode, setWiringMode, project } = useEditor();
   return (
     <>
       <label className="lamp-switch">
-        <span>模型物理防穿模约束</span>
+        <span>{t('模型物理防穿模约束', '3D Anti-Clipping Collisions')}</span>
         <input
           type="checkbox"
           role="switch"
-          aria-label="模型物理防穿模约束"
+          aria-label={t('模型物理防穿模约束', '3D Anti-Clipping Collisions')}
           checked={collisionEnabled}
           onChange={(e) => setCollisionEnabled(e.target.checked)}
         />
       </label>
       <p className="field-note">
-        启用后桌面、层架、地面与墙面物品拖动时会自动防穿透避让，走线也将自动绕行固体障碍并可穿过走线孔。
+        {t(
+          '启用后桌面、层架、地面与墙面物品拖动时会自动防穿透避让，走线也将自动绕行固体障碍并可穿过走线孔。',
+          'Prevents items from clipping into each other while dragging and routes cables cleanly around obstacles.',
+        )}
       </p>
       <button
         type="button"
@@ -846,8 +915,10 @@ function PhysicalConstraintsPanel() {
         onClick={() => setWiringMode(!wiringMode)}
       >
         {wiringMode
-          ? '退出 3D 点击端口连线模式'
-          : `进入 3D 点选端口连线（已连接 ${project.cables?.length ?? 0} 根线缆）`}
+          ? t('退出 3D 点击端口连线模式', 'Exit 3D Port Wiring Mode')
+          : lang === 'en'
+            ? `Start 3D Port Wiring (${project.cables?.length ?? 0} connected)`
+            : `进入 3D 点选端口连线（已连接 ${project.cables?.length ?? 0} 根线缆）`}
       </button>
     </>
   );

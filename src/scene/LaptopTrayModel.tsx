@@ -1,3 +1,5 @@
+// CS50x Final Project — DeskCraft
+// AI Assistance Disclosure: Developed under the author's design & domain rules with assistance from AI coding tools (see src/App.tsx & README.md).
 import { useEffect, useMemo } from 'react';
 import { RoundedBox } from '@react-three/drei';
 import { CanvasTexture, SRGBColorSpace } from 'three';
@@ -42,14 +44,10 @@ function makeNbTrayTexture(): CanvasTexture {
     }
   }
 
-  // Central VESA 75x75 & 100x100 embossed mounting ring & micro branding
+  // Central VESA 75x75 & 100x100 embossed mounting ring
   ctx.strokeStyle = '#2d333f';
   ctx.lineWidth = 3;
   ctx.strokeRect(176, 176, 160, 160);
-  ctx.fillStyle = '#9aa3b2';
-  ctx.font = 'bold 17px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('NB · FP-2 VESA TRAY', 256, 466);
 
   const tex = new CanvasTexture(canvas);
   tex.colorSpace = SRGBColorSpace;

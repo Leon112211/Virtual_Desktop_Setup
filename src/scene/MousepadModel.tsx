@@ -1,3 +1,5 @@
+// CS50x Final Project — DeskCraft
+// AI Assistance Disclosure: Developed under the author's design & domain rules with assistance from AI coding tools (see src/App.tsx & README.md).
 import { useEffect, useMemo } from 'react';
 import { CanvasTexture, ExtrudeGeometry, Path, RepeatWrapping, Shape, SRGBColorSpace } from 'three';
 import type { Size } from '../domain/project';

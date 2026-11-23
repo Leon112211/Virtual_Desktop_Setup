@@ -1,3 +1,5 @@
+// CS50x Final Project — DeskCraft
+// AI Assistance Disclosure: Developed under the author's design & domain rules with assistance from AI coding tools (see src/App.tsx & README.md).
 import { describe, expect, it } from 'vitest';
 import { Vector3 } from 'three';
 import { computeCablePath } from './cableRouting';
@@ -211,5 +213,44 @@ describe('power strip, outlet & plug system', () => {
     expect(pStripToWall!.points.length).toBeGreaterThanOrEqual(4);
     const lastPt = pStripToWall!.points[pStripToWall!.points.length - 1];
     expect(lastPt.y).toBeLessThan(proj.desk.height);
+  });
+
+  it('places power strip with user-selected built-in cord length and auto-plugs into wall outlet', async () => {
+    const { useEditor } = await import('../store/editorStore');
+    const { canAcPlugFitOutlet } = await import('./power');
+    useEditor.getState().replace(defaultProject(), new Map());
+
+    expect(canAcPlugFitOutlet('ganAdapter', 'combo5')).toBe(true);
+    expect(canAcPlugFitOutlet('ganAdapter', 'twoPin')).toBe(true);
+    expect(canAcPlugFitOutlet('ganAdapter', 'threePin')).toBe(false);
+    expect(canAcPlugFitOutlet('cn3Pin', 'twoPin')).toBe(false);
+    expect(canAcPlugFitOutlet('cn3Pin', 'combo5')).toBe(true);
+
+    const stripId = useEditor.getState().addPowerStripWithCord({
+      cordLengthM: 1.8,
+      plugType: 'cn3Pin',
+      connectionMode: 'autoWallOutlet',
+    });
+    const proj = useEditor.getState().project;
+    const strip = proj.items.find((i) => i.id === stripId)!;
+    const wallOutlet = proj.items.find((i) => i.kind === 'wallOutlet')!;
+    expect(strip).toBeTruthy();
+    expect(wallOutlet).toBeTruthy();
+    expect(strip.powerStrip?.cordLengthM).toBe(1.8);
+
+    const mainsCord = proj.cables!.find(
+      (c) => c.from.type === 'device' && c.from.itemId === stripId && c.from.portId === 'ac-in',
+    )!;
+    expect(mainsCord).toBeTruthy();
+    expect(mainsCord.lengthM).toBe(1.8);
+    expect(mainsCord.toPlugType).toBe('cn3Pin');
+    expect(mainsCord.to).toEqual({ type: 'device', itemId: wallOutlet.id, portId: 'slot-1' });
+
+    useEditor
+      .getState()
+      .configurePowerStripCord(stripId, { cordLengthM: 3, plugType: 'rightAngle' });
+    const updatedCord = useEditor.getState().project.cables!.find((c) => c.id === mainsCord.id)!;
+    expect(updatedCord.lengthM).toBe(3);
+    expect(updatedCord.toPlugType).toBe('rightAngle');
   });
 });

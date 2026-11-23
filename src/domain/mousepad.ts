@@ -1,4 +1,7 @@
+// CS50x Final Project — DeskCraft
+// AI Assistance Disclosure: Developed under the author's design & domain rules with assistance from AI coding tools (see src/App.tsx & README.md).
 import type { Size } from './project';
+import { tr } from '../i18n';
 
 export const MOUSEPAD_MIN_WIDTH = 0.2;
 export const MOUSEPAD_MAX_WIDTH = 1.6;
@@ -14,11 +17,46 @@ export const MOUSEPAD_DEFAULT_SIZE: Size = {
 };
 
 export const MOUSEPAD_THICKNESS_PRESETS = [
-  { meters: 0.002, mm: 2, label: '2 mm', hint: '硬朗竞速' },
-  { meters: 0.003, mm: 3, label: '3 mm', hint: '偏硬竞技' },
-  { meters: 0.004, mm: 4, label: '4 mm', hint: '均衡主流' },
-  { meters: 0.005, mm: 5, label: '5 mm', hint: '柔软舒适' },
-  { meters: 0.006, mm: 6, label: '6 mm', hint: '加厚缓震' },
+  {
+    meters: 0.002,
+    mm: 2,
+    label: '2 mm',
+    get hint() {
+      return tr('硬朗竞速', 'Firm Speed');
+    },
+  },
+  {
+    meters: 0.003,
+    mm: 3,
+    label: '3 mm',
+    get hint() {
+      return tr('偏硬竞技', 'Medium-Firm');
+    },
+  },
+  {
+    meters: 0.004,
+    mm: 4,
+    label: '4 mm',
+    get hint() {
+      return tr('均衡主流', 'Balanced Standard');
+    },
+  },
+  {
+    meters: 0.005,
+    mm: 5,
+    label: '5 mm',
+    get hint() {
+      return tr('柔软舒适', 'Plush Control');
+    },
+  },
+  {
+    meters: 0.006,
+    mm: 6,
+    label: '6 mm',
+    get hint() {
+      return tr('加厚缓震', 'Extra Cushion');
+    },
+  },
 ] as const;
 
 export const MOUSEPAD_SIZE_PRESETS: {

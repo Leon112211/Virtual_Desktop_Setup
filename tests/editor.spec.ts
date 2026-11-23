@@ -1,3 +1,5 @@
+// CS50x Final Project — DeskCraft
+// AI Assistance Disclosure: Developed under the author's design & domain rules with assistance from AI coding tools (see src/App.tsx & README.md).
 import { test, expect, type Page } from '@playwright/test';
 import { PerspectiveCamera, Vector3 } from 'three';
 import type { SceneItem } from '../src/domain/project';
@@ -1060,13 +1062,13 @@ test('桌体扩展、笔记本/Mac 生态、支架联动、支架臂与模拟走
   expect(p.desk.shelf).toEqual({ enabled: true, depth: 0.22, height: 0.18 });
 
   // 2. 添加 Mac mini 并置于等宽层架上，添加 Mac Studio、游戏本、MacBook 及笔记本支架
-  await page.getByRole('button', { name: '添加Mac mini', exact: true }).click();
+  await page.getByRole('button', { name: '添加迷你主机', exact: true }).click();
   await page.getByRole('button', { name: '等宽层架', exact: true }).click();
   await editNumber(page, '左右位置', '-40');
   await editNumber(page, '前后位置', '-24');
   await expect(page.getByRole('button', { name: /件超出桌面/ })).toHaveCount(0);
 
-  await page.getByRole('button', { name: '添加Mac Studio', exact: true }).click();
+  await page.getByRole('button', { name: '添加桌面工作站', exact: true }).click();
   await editNumber(page, '左右位置', '48');
   await editNumber(page, '前后位置', '-15');
   await page.getByRole('button', { name: '插入 RJ45 网线 (Cat6)', exact: true }).click();
@@ -1074,7 +1076,7 @@ test('桌体扩展、笔记本/Mac 生态、支架联动、支架臂与模拟走
   await page.getByLabel('线长统计口径', { exact: true }).selectOption('body');
   await expect(page.getByLabel('线长统计口径', { exact: true })).toHaveValue('body');
 
-  await page.getByRole('button', { name: '添加MacBook', exact: true }).click();
+  await page.getByRole('button', { name: '添加轻薄笔记本', exact: true }).click();
   await page.getByRole('button', { name: 'Pro 16"', exact: true }).click();
   await expect(page.getByRole('button', { name: '选择配色 深空黑色', exact: true })).toBeVisible();
   await expect(page.getByLabel('自定义颜色', { exact: true })).toHaveCount(0);
@@ -1102,9 +1104,9 @@ test('桌体扩展、笔记本/Mac 生态、支架联动、支架臂与模拟走
   await page
     .locator('canvas')
     .screenshot({ path: testInfo.outputPath('ports-macbook-magsafe-left-closeup.png') });
-  await page.getByRole('button', { name: '插入 MagSafe 3 充电线', exact: true }).click();
+  await page.getByRole('button', { name: '插入 磁吸充电线', exact: true }).click();
   await expect(
-    page.getByText('苹果官方 USB-C 转 MagSafe 3 连接线标准长度（含端子 2 m）', { exact: true }),
+    page.getByText('USB-C 转磁吸充电线标准固定长度（含端子 2 m）', { exact: true }),
   ).toBeVisible();
   await page.evaluate(async () => {
     const r3fPath = performance
@@ -1564,7 +1566,7 @@ test('显示器双支架臂、倒挂模式与 1:1 NB FP-2 笔记本托盘全流�
   await editNumber(page, '前后位置', '-14');
 
   await library(page);
-  await page.getByRole('button', { name: '添加MacBook', exact: true }).click();
+  await page.getByRole('button', { name: '添加轻薄笔记本', exact: true }).click();
   await editNumber(page, '左右位置', '32');
   await editNumber(page, '前后位置', '0');
 
@@ -1573,7 +1575,7 @@ test('显示器双支架臂、倒挂模式与 1:1 NB FP-2 笔记本托盘全流�
   await library(page);
   await page.getByRole('button', { name: '添加显示器支架臂', exact: true }).click();
   await library(page);
-  await page.getByRole('button', { name: '添加NB 笔记本托盘', exact: true }).click();
+  await page.getByRole('button', { name: '添加笔记本托盘', exact: true }).click();
 
   // 切换为倒挂悬吊模式并调节托盘悬停高度与倾角
   await page.getByRole('button', { name: '倒挂悬吊', exact: true }).click();
@@ -1668,7 +1670,7 @@ test('1:1 PS5 DualSense 与 Xbox Series 游戏手柄切换、官方配色与并�
   // 2. 再添加一台游戏手柄，切换为 Xbox Series（波动蓝 #1f6fc9），并排摆放
   await library(page);
   await page.getByRole('button', { name: '添加无线游戏手柄', exact: true }).click();
-  await page.getByRole('button', { name: 'Xbox Series', exact: true }).click();
+  await page.getByRole('button', { name: '非对称摇杆款', exact: true }).click();
   await page.getByRole('button', { name: '选择颜色 #1f6fc9', exact: true }).click();
   await editNumber(page, '左右位置', '44');
   await editNumber(page, '前后位置', '18');
@@ -1975,7 +1977,7 @@ test('Apple Studio Display 1:1 模具、可调倾角/升降支架切换与前后
   await ready(page);
 
   await selectSceneItem(page, '27 寸显示器');
-  await page.getByRole('button', { name: 'Apple Studio Display', exact: true }).click();
+  await page.getByRole('button', { name: '一体平背款', exact: true }).click();
   let p = await state(page);
   let mon = p.items.find((i: SceneItem) => i.kind === 'monitor')!;
   expect(mon.monitor).toEqual({ model: 'studioDisplay', standType: 'tilt' });
@@ -3126,7 +3128,7 @@ test('插座、插排与多规格插头系统：配置切换、墙地双装与�
   expect(st.cables?.[0].toPlugType).toBe('rightAngle');
 
   // 同时给桌面插排插一根 GaN 快充头 Type-C 线缆与一根 Apple 方形适配器电源线以便同框查看多规格插头
-  await page.getByRole('button', { name: '插入 USB-C / 雷雳', exact: true }).click();
+  await page.getByRole('button', { name: '插入 USB4 / Type-C', exact: true }).click();
   await page.getByLabel('插头规格').nth(1).selectOption('ganAdapter');
 
   // 将显示器电源线也接入排插孔位，并选 GaN / 国标插头近景拍照检查
@@ -3354,7 +3356,7 @@ test('自定义端口直连、控制节点逐点微调、穿桌面/底座走线�
     .screenshot({ path: testInfo.outputPath('cable-holes-and-nodes-closeup.png') });
 
   // 4. 验证物理防穿模约束开关 & Inspector 数值重叠警示「一键自动避让分离」
-  await page.getByRole('button', { name: '添加Mac Studio', exact: true }).click();
+  await page.getByRole('button', { name: '添加桌面工作站', exact: true }).click();
   await editNumber(page, '左右位置', '-28');
   await editNumber(page, '前后位置', '-24');
   await expect(page.getByText(/发生物理模型重叠/)).toBeVisible();
@@ -3379,7 +3381,7 @@ test('32. MacBook Pro 14" 2024-2026 C面与 2026 PROLED XDR 尺寸版本切换�
   });
   await ready(page);
 
-  await page.getByRole('button', { name: '添加MacBook', exact: true }).click();
+  await page.getByRole('button', { name: '添加轻薄笔记本', exact: true }).click();
   await editNumber(page, '左右位置', '-50');
   await editNumber(page, '前后位置', '14');
 
@@ -3476,15 +3478,16 @@ test('33. 桌面音响标杆系统（YU4/MR4/A2+）、主副箱配对音箱线�
     .nth(1)
     .click();
 
-  await expect(
-    page.getByRole('button', { name: 'Kanto YU4 (全能桌面)', exact: true }),
-  ).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: '4" 全接口书架箱', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
   await expect(
     page.getByRole('button', { name: '有源主箱 (Active)', exact: true }),
   ).toHaveAttribute('aria-pressed', 'true');
 
   // 切换至 Edifier MR4（验证 6.35mm TRS 与前置 AUX 接口切换），再切 Audioengine A2+，再切回 Kanto YU4
-  await page.getByRole('button', { name: 'Edifier MR4 (平衡监听)', exact: true }).click();
+  await page.getByRole('button', { name: '4" 平衡监听箱', exact: true }).click();
   await expect(
     page.getByRole('button', { name: '插入 6.35mm TRS 平衡音频线', exact: true }),
   ).toBeVisible();
@@ -3526,9 +3529,9 @@ test('33. 桌面音响标杆系统（YU4/MR4/A2+）、主副箱配对音箱线�
     .filter({ has: page.getByText('桌面音响', { exact: true }) })
     .nth(1)
     .click();
-  await page.getByRole('button', { name: 'Audioengine A2+ (紧凑)', exact: true }).click();
-  await expect(page.getByRole('button', { name: '插入 USB-C / 雷雳', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Kanto YU4 (全能桌面)', exact: true }).click();
+  await page.getByRole('button', { name: '3" 紧凑桌面箱', exact: true }).click();
+  await expect(page.getByRole('button', { name: '插入 USB4 / Type-C', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '4" 全接口书架箱', exact: true }).click();
 
   // 2. 插入核心音响线缆：主副箱音箱连接线 + 3.5mm AUX + 光纤 + RCA + 电源线
   await page.getByRole('button', { name: '插入 主副箱音箱连接线 (16AWG)', exact: true }).click();
@@ -3670,17 +3673,16 @@ test('35. Mac mini (127.2 × 127.1 × 49.7 mm) 与 Mac Studio (197.2 × 197.2 ×
   });
   await ready(page);
 
-  // 1. 移除中央键盘以免遮挡，添加并排放置的 Mac mini 与 Mac Studio 以便高清无遮挡特写核验
-  await selectSceneItem(page, '机械键盘');
-  await page.getByRole('button', { name: '删除', exact: true }).click();
+  // 1. 清空初始笔记本以免遮挡，添加并排放置的迷你主机与桌面工作站以便高清无遮挡特写核验
+  await resetToCleanMonitorDesk(page);
 
   await library(page);
-  await page.getByRole('button', { name: '添加Mac mini', exact: true }).click();
+  await page.getByRole('button', { name: '添加迷你主机', exact: true }).click();
   await editNumber(page, '左右位置', '-13');
   await editNumber(page, '前后位置', '24');
 
   await library(page);
-  await page.getByRole('button', { name: '添加Mac Studio', exact: true }).click();
+  await page.getByRole('button', { name: '添加桌面工作站', exact: true }).click();
   await editNumber(page, '左右位置', '13');
   await editNumber(page, '前后位置', '24');
 
@@ -3892,7 +3894,7 @@ test('36. 物品自带 Pitch / Yaw / Roll 与笔记本屏幕开合角度直接�
 
   // 2. 添加 MacBook 并置于空位：核验 Yaw + 屏幕开合角 (lidAngle) 手柄融合在机身上，支持拖拽及 Esc 取消
   await library(page);
-  await page.getByRole('button', { name: '添加MacBook', exact: true }).click();
+  await page.getByRole('button', { name: '添加轻薄笔记本', exact: true }).click();
   await editNumber(page, '左右位置', '-42');
   await editNumber(page, '前后位置', '16');
 
@@ -3972,7 +3974,7 @@ test('37. Twelve South Curve Flex 与 Rain Design mStand 笔记本支架 1:1 结
   await page.getByRole('button', { name: '删除', exact: true }).click();
 
   await library(page);
-  await page.getByRole('button', { name: '添加MacBook', exact: true }).click();
+  await page.getByRole('button', { name: '添加轻薄笔记本', exact: true }).click();
 
   await library(page);
   await page.getByRole('button', { name: '添加笔记本支架', exact: true }).click();
@@ -3992,7 +3994,7 @@ test('37. Twelve South Curve Flex 与 Rain Design mStand 笔记本支架 1:1 结
   await page.getByRole('button', { name: '添加笔记本支架', exact: true }).click();
   await editNumber(page, '左右位置', '20');
   await editNumber(page, '前后位置', '20');
-  await page.getByRole('button', { name: 'Rain Design mStand (固定式)', exact: true }).click();
+  await page.getByRole('button', { name: '一体铝合金固定款', exact: true }).click();
 
   st = await state(page);
   const mStand = st.items.filter((i: SceneItem) => i.kind === 'laptopStand')[1];
@@ -4060,7 +4062,7 @@ test('38. 主页左侧线缆系统：充电线与电源线专区陈列、自选�
     .locator('.library')
     .screenshot({ path: testInfo.outputPath('library-thumbnails.png') });
   await page.getByRole('button', { name: '添加智能桌面插排', exact: true }).click();
-  await page.getByRole('button', { name: '添加MacBook', exact: true }).click();
+  await page.getByRole('button', { name: '添加轻薄笔记本', exact: true }).click();
 
   // 2. 在左侧栏打开「线缆」标签页，确认设有「充电线与电源线专区」及多款不同型号电源线
   const cableTab = page.locator('.library-tabs button', { hasText: '线缆' });
@@ -4069,12 +4071,12 @@ test('38. 主页左侧线缆系统：充电线与电源线专区陈列、自选�
 
   const powerZone = page.getByRole('region', { name: '充电线与电源线专区' });
   await expect(powerZone).toBeVisible();
-  await expect(powerZone.getByRole('button', { name: /国标三插品字电源线/ })).toBeVisible();
+  await expect(powerZone.getByRole('button', { name: /标准三插品字电源线/ })).toBeVisible();
   await expect(powerZone.getByRole('button', { name: /90° 超薄直角电源线/ })).toBeVisible();
   await expect(powerZone.getByRole('button', { name: /纯白两脚 8 字尾电源线/ })).toBeVisible();
-  await expect(powerZone.getByRole('button', { name: /MagSafe 3 磁吸编织线/ })).toBeVisible();
-  await expect(powerZone.getByRole('button', { name: /苹果方头 Type-C 充电线/ })).toBeVisible();
-  await expect(powerZone.getByRole('button', { name: /氮化镓 GaN 快充套装线/ })).toBeVisible();
+  await expect(powerZone.getByRole('button', { name: /磁吸编织快充线/ })).toBeVisible();
+  await expect(powerZone.getByRole('button', { name: /双头 Type-C 供电线/ })).toBeVisible();
+  await expect(powerZone.getByRole('button', { name: /USB 转 Type-C 供电线/ })).toBeVisible();
 
   // 3. 选择「90° 超薄直角电源线」，手动配对显示器与插排并确认接线
   await powerZone.getByRole('button', { name: /90° 超薄直角电源线/ }).click();
@@ -4099,14 +4101,15 @@ test('38. 主页左侧线缆系统：充电线与电源线专区陈列、自选�
   expect(cur.cables?.[0].kind).toBe('power');
   expect(cur.cables?.[0].toPlugType).toBe('rightAngle');
 
-  // 4. 再选择「氮化镓 GaN 快充套装线」，切换进入 3D 点选端口接线提示后取消，再以手动连接一条 GaN 快充线
-  await powerZone.getByRole('button', { name: /氮化镓 GaN 快充套装线/ }).click();
+  // 4. 再选择「双头 Type-C 供电线」并选配 GaN 快充头配件，切换进入 3D 点选端口接线提示后取消，再以手动连接
+  await powerZone.getByRole('button', { name: /双头 Type-C 供电线/ }).click();
+  await page.getByLabel('额外插头配件', { exact: true }).selectOption('ganAdapter');
   await page.getByRole('button', { name: '进入 3D 点选端口接线', exact: true }).click();
-  await expect(page.getByText(/3D 连线中（氮化镓 GaN 快充套装线）/)).toBeVisible();
+  await expect(page.getByText(/3D 连线中（双头 Type-C 供电线）/)).toBeVisible();
   await page.getByRole('button', { name: '退出 3D 点选端口接线', exact: true }).click();
 
   const mbUsbcOpt = await fromSelect
-    .locator('option', { hasText: /MacBook.*(Thunderbolt|USB-C)/ })
+    .locator('option', { hasText: /轻薄笔记本.*(USB4|USB-C|Type-C)/ })
     .first()
     .getAttribute('value');
   expect(mbUsbcOpt).toBeTruthy();
@@ -4177,7 +4180,7 @@ async function resetToCleanMonitorDesk(page: Page) {
   const rows = page.locator('.scene-row');
   if ((await rows.count()) > 1) {
     await rows
-      .filter({ has: page.getByText('MacBook', { exact: true }) })
+      .filter({ has: page.getByText('轻薄笔记本', { exact: true }) })
       .first()
       .click();
     await page.getByRole('button', { name: '删除', exact: true }).click();
@@ -4366,7 +4369,7 @@ test('41. DP 线细分双头 DP 与 DP 转 Type-C 两种类型，端口匹配与
   await ready(page);
   await resetToCleanMonitorDesk(page);
   await library(page);
-  await page.getByRole('button', { name: '添加MacBook', exact: true }).click();
+  await page.getByRole('button', { name: '添加轻薄笔记本', exact: true }).click();
 
   await page.locator('.library-tabs button', { hasText: '线缆' }).click();
   const signalZone = page.getByRole('region', { name: '信号与音频线缆' });
@@ -4379,10 +4382,8 @@ test('41. DP 线细分双头 DP 与 DP 转 Type-C 两种类型，端口匹配与
   await dualDpBtn.click();
   const fromSelect = page.getByLabel('左侧起点接口', { exact: true });
   const toSelect = page.getByLabel('左侧终点接口', { exact: true });
-  await expect(fromSelect.locator('option', { hasText: /Thunderbolt|Type-C|USB-C/ })).toHaveCount(
-    0,
-  );
-  await expect(toSelect.locator('option', { hasText: /MacBook/ })).toHaveCount(0);
+  await expect(fromSelect.locator('option', { hasText: /USB4|Type-C|USB-C/ })).toHaveCount(0);
+  await expect(toSelect.locator('option', { hasText: /轻薄笔记本/ })).toHaveCount(0);
 
   // 2. 选择「DP ↔ Type-C」：连接显示器 DP 与 MacBook Thunderbolt/USB-C，端头分别记录 dp 与 usbc
   await dpTypeCBtn.click();
@@ -4394,7 +4395,7 @@ test('41. DP 线细分双头 DP 与 DP 转 Type-C 两种类型，端口匹配与
   await fromSelect.selectOption(monitorDpVal!);
 
   const mbUsbcVal = await toSelect
-    .locator('option', { hasText: /MacBook.*(Thunderbolt|USB-C)/ })
+    .locator('option', { hasText: /轻薄笔记本.*(USB4|USB-C|Type-C)/ })
     .first()
     .getAttribute('value');
   expect(mbUsbcVal).toBeTruthy();
@@ -4429,7 +4430,7 @@ test('42. 人工拖拽编辑线缆节点后仍受重力落地，无桌板斜穿�
   await resetToCleanMonitorDesk(page);
   await library(page);
   await page.getByRole('button', { name: '添加桌面音响', exact: true }).click();
-  await page.getByRole('button', { name: '添加MacBook', exact: true }).click();
+  await page.getByRole('button', { name: '添加轻薄笔记本', exact: true }).click();
 
   await page.locator('.library-tabs button', { hasText: '线缆' }).click();
   const signalZone = page.getByRole('region', { name: '信号与音频线缆' });
@@ -4443,7 +4444,7 @@ test('42. 人工拖拽编辑线缆节点后仍受重力落地，无桌板斜穿�
     .getAttribute('value');
   await fromSelect.selectOption(monDp!);
   const mbUsbc = await toSelect
-    .locator('option', { hasText: /MacBook.*(Thunderbolt|USB-C)/ })
+    .locator('option', { hasText: /轻薄笔记本.*(USB4|USB-C|Type-C)/ })
     .first()
     .getAttribute('value');
   await toSelect.selectOption(mbUsbc!);
@@ -4635,7 +4636,7 @@ test('monitor stock stand stops pitch at column front face without clipping and 
   await editNumber(page, '左右位置', '28');
   await editNumber(page, '前后位置', '-14');
   await library(page);
-  await page.getByRole('button', { name: '添加MacBook', exact: true }).click();
+  await page.getByRole('button', { name: '添加轻薄笔记本', exact: true }).click();
   await editNumber(page, '左右位置', '50');
   await editNumber(page, '前后位置', '14');
   await page.locator('.library-tabs button', { hasText: '线缆' }).click();
@@ -4649,7 +4650,7 @@ test('monitor stock stand stops pitch at column front face without clipping and 
     .getAttribute('value');
   await fromSel.selectOption(dpVal!);
   const mbVal = await toSel
-    .locator('option', { hasText: /MacBook.*(Thunderbolt|USB-C)/ })
+    .locator('option', { hasText: /轻薄笔记本.*(USB4|USB-C|Type-C)/ })
     .first()
     .getAttribute('value');
   await toSel.selectOption(mbVal!);
@@ -4706,7 +4707,7 @@ test('43. 定长线缆禁止超长拉伸且保持固定长度，并避免穿入�
   await resetToCleanMonitorDesk(page);
 
   await library(page);
-  await page.getByRole('button', { name: '添加MacBook', exact: true }).click();
+  await page.getByRole('button', { name: '添加轻薄笔记本', exact: true }).click();
   await editNumber(page, '左右位置', '68');
   await editNumber(page, '前后位置', '20');
 
@@ -4720,12 +4721,12 @@ test('43. 定长线缆禁止超长拉伸且保持固定长度，并避免穿入�
   const fromSelect = page.getByLabel('左侧起点接口', { exact: true });
   const toSelect = page.getByLabel('左侧终点接口', { exact: true });
   const monUsbc = await fromSelect
-    .locator('option', { hasText: /显示器.*(Thunderbolt|USB-C|Type-C)/ })
+    .locator('option', { hasText: /显示器.*(USB4|USB-C|Type-C)/ })
     .first()
     .getAttribute('value');
   await fromSelect.selectOption(monUsbc!);
   const mbUsbc = await toSelect
-    .locator('option', { hasText: /MacBook.*(Thunderbolt|USB-C|雷雳)/ })
+    .locator('option', { hasText: /轻薄笔记本.*(USB4|USB-C|Type-C)/ })
     .first()
     .getAttribute('value');
   await toSelect.selectOption(mbUsbc!);
@@ -4823,7 +4824,7 @@ test('44. Type-C 分为双头 Type-C 与 USB ↔ Type-C 且不自动附带插头
   await resetToCleanMonitorDesk(page);
 
   await library(page);
-  await page.getByRole('button', { name: '添加MacBook', exact: true }).click();
+  await page.getByRole('button', { name: '添加轻薄笔记本', exact: true }).click();
   await editNumber(page, '左右位置', '38');
   await editNumber(page, '前后位置', '14');
 
@@ -4856,7 +4857,7 @@ test('44. Type-C 分为双头 Type-C 与 USB ↔ Type-C 且不自动附带插头
   await fromSelect.selectOption(monUsba!);
 
   const mbUsbc = await toSelect
-    .locator('option', { hasText: /MacBook.*(Thunderbolt|USB-C|Type-C|雷雳)/ })
+    .locator('option', { hasText: /轻薄笔记本.*(USB4|USB-C|Type-C)/ })
     .first()
     .getAttribute('value');
   expect(mbUsbc).toBeTruthy();
@@ -4878,7 +4879,7 @@ test('44. Type-C 分为双头 Type-C 与 USB ↔ Type-C 且不自动附带插头
   await expect(accessorySelect).toHaveValue('');
 
   const mbFromOpt = await fromSelect
-    .locator('option', { hasText: /MacBook.*(Thunderbolt|USB-C|Type-C|雷雳)/ })
+    .locator('option', { hasText: /轻薄笔记本.*(USB4|USB-C|Type-C)/ })
     .first()
     .getAttribute('value');
   expect(mbFromOpt).toBeTruthy();
@@ -4904,7 +4905,7 @@ test('44. Type-C 分为双头 Type-C 与 USB ↔ Type-C 且不自动附带插头
     .getByRole('button', { name: '1.5m', exact: true })
     .click();
   const mbFromOpt2 = await fromSelect
-    .locator('option', { hasText: /MacBook.*(Thunderbolt|USB-C|Type-C|雷雳)/ })
+    .locator('option', { hasText: /轻薄笔记本.*(USB4|USB-C|Type-C)/ })
     .nth(1)
     .getAttribute('value');
   await fromSelect.selectOption(mbFromOpt2!);
@@ -5069,7 +5070,7 @@ test('45. 3D 放置悬垂线缆与移动已接线设备均严禁拉伸超过固�
 
   // 验证已接线缆的设备向远处移动时同样受固定线长牵引限位，不会把线缆拉长
   await library(page);
-  await page.getByRole('button', { name: '添加MacBook', exact: true }).click();
+  await page.getByRole('button', { name: '添加轻薄笔记本', exact: true }).click();
   await editNumber(page, '左右位置', '32');
   await editNumber(page, '前后位置', '14');
 
@@ -5085,19 +5086,19 @@ test('45. 3D 放置悬垂线缆与移动已接线设备均严禁拉伸超过固�
   const fromSelect = page.getByLabel('左侧起点接口', { exact: true });
   const toSelect = page.getByLabel('左侧终点接口', { exact: true });
   const monUsbc = await fromSelect
-    .locator('option', { hasText: /显示器.*(Thunderbolt|USB-C|Type-C)/ })
+    .locator('option', { hasText: /显示器.*(USB4|USB-C|Type-C)/ })
     .first()
     .getAttribute('value');
   await fromSelect.selectOption(monUsbc!);
   const mbUsbc = await toSelect
-    .locator('option', { hasText: /MacBook.*(Thunderbolt|USB-C|雷雳)/ })
+    .locator('option', { hasText: /轻薄笔记本.*(USB4|USB-C|Type-C)/ })
     .first()
     .getAttribute('value');
   await toSelect.selectOption(mbUsbc!);
   await page.getByRole('button', { name: '确认接线', exact: true }).click();
   await expect(page.locator('.wired-cable-item')).toHaveCount(1);
 
-  await selectSceneItem(page, 'MacBook');
+  await selectSceneItem(page, '轻薄笔记本');
   await editNumber(page, '左右位置', '95');
   await expect(page.getByText(/已达固定线缆长度极限/)).toBeVisible();
   const st = await state(page);
@@ -5107,13 +5108,14 @@ test('45. 3D 放置悬垂线缆与移动已接线设备均严禁拉伸超过固�
   expect(errors).toEqual([]);
 });
 
-test('46. 初始场景仅保留显示器与 MacBook 并默认插好双头 Type-C 连线', async ({ page }) => {
+test('46. 初始场景仅保留显示器与轻薄笔记本并默认插好双头 Type-C 连线', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(err.message));
 
   await ready(page);
-  await expect(page).toHaveTitle(/桌构 DeskCraft/);
-  await expect(page.locator('.brand')).toContainText('桌构DeskCraft');
+  await expect(page).toHaveTitle('桌构 · 三维桌搭工作台');
+  await expect(page.locator('.brand')).toContainText('桌构');
+  await expect(page.locator('.brand')).not.toContainText('DeskCraft');
   const st = await state(page);
   expect(st.items.map((i: SceneItem) => i.kind)).toEqual(['monitor', 'macbook']);
   expect(st.cables ?? []).toHaveLength(1);
@@ -5163,6 +5165,264 @@ test('46. 初始场景仅保留显示器与 MacBook 并默认插好双头 Type-C
   await page.locator('canvas').screenshot({
     path: 'C:/Users/Leon/.gemini/antigravity/brain/77106729-550e-46ed-bc9d-f21a6207463d/cable-end-resilience-closeup.png',
   });
+
+  expect(errors).toEqual([]);
+});
+
+test('47. 模型库示意图重构与全产品去 Logo 视觉验收', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+
+  await ready(page);
+  await expect(page.locator('.model-card')).toHaveCount(18);
+
+  // Verify every card renders a clean SVG illustration without brand text/logos
+  const svgTexts = await page.locator('.model-card .model-picture svg text').count();
+  expect(svgTexts).toBe(0);
+
+  // Capture top & bottom halves of the left model library at crisp resolution so all 18 cards are clearly inspectable
+  const libScroll = page.locator('.library-scroll');
+  await libScroll.evaluate((el) => {
+    el.scrollTop = 0;
+  });
+  await page.waitForTimeout(120);
+  await page.locator('.library').screenshot({
+    path: 'C:/Users/Leon/.gemini/antigravity/brain/77106729-550e-46ed-bc9d-f21a6207463d/model-library-thumbnails-top.png',
+  });
+
+  await libScroll.evaluate((el) => {
+    el.scrollTop = Math.round(el.scrollHeight * 0.3);
+  });
+  await page.waitForTimeout(120);
+  await page.locator('.library').screenshot({
+    path: 'C:/Users/Leon/.gemini/antigravity/brain/77106729-550e-46ed-bc9d-f21a6207463d/model-library-thumbnails-mid.png',
+  });
+
+  await libScroll.evaluate((el) => {
+    el.scrollTop = el.scrollHeight;
+  });
+  await page.waitForTimeout(120);
+  await page.locator('.library').screenshot({
+    path: 'C:/Users/Leon/.gemini/antigravity/brain/77106729-550e-46ed-bc9d-f21a6207463d/model-library-thumbnails-bottom.png',
+  });
+
+  // Reset scroll and spawn previously branded 3D items (Mac mini, mouse, speaker, controller, monitor arm) to verify logo removal in 3D
+  await libScroll.evaluate((el) => {
+    el.scrollTop = 0;
+  });
+  for (const label of ['添加桌面音响', '添加无线游戏手柄', '添加电竞鼠标', '添加迷你主机']) {
+    await page.getByLabel(label).click();
+  }
+  await page.waitForTimeout(250);
+
+  // Rear/angled 3/4 view inspecting Dell monitor backplate (no DELL logo), Mac mini top (no Apple logo), mouse top (no G logo), speaker & controller
+  await page.evaluate(async () => {
+    const r3fPath = performance
+      .getEntriesByType('resource')
+      .map((entry) => entry.name)
+      .find((url) => new URL(url).pathname.endsWith('/@react-three_fiber.js'))!;
+    const { _roots } = await import(/* @vite-ignore */ r3fPath);
+    const canvas = document.querySelector('canvas')!;
+    const { camera, controls, invalidate } = _roots.get(canvas).store.getState();
+    controls.target.set(0.0, 0.88, -0.02);
+    camera.position.set(0.45, 1.38, -0.92);
+    camera.lookAt(0.0, 0.88, -0.02);
+    controls.update();
+    invalidate();
+    await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+  });
+  await page.locator('canvas').screenshot({
+    path: 'C:/Users/Leon/.gemini/antigravity/brain/77106729-550e-46ed-bc9d-f21a6207463d/models-no-logos-rear-3d.png',
+  });
+
+  // Front-top view inspecting speaker front, mouse top, Mac mini top, controller center
+  await page.evaluate(async () => {
+    const r3fPath = performance
+      .getEntriesByType('resource')
+      .map((entry) => entry.name)
+      .find((url) => new URL(url).pathname.endsWith('/@react-three_fiber.js'))!;
+    const { _roots } = await import(/* @vite-ignore */ r3fPath);
+    const canvas = document.querySelector('canvas')!;
+    const { camera, controls, invalidate } = _roots.get(canvas).store.getState();
+    controls.target.set(0.0, 0.84, 0.05);
+    camera.position.set(0.18, 1.34, 0.92);
+    camera.lookAt(0.0, 0.84, 0.05);
+    controls.update();
+    invalidate();
+    await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+  });
+  await page.locator('canvas').screenshot({
+    path: 'C:/Users/Leon/.gemini/antigravity/brain/77106729-550e-46ed-bc9d-f21a6207463d/models-no-logos-front-3d.png',
+  });
+
+  expect(errors).toEqual([]);
+});
+
+test('48. 鼠标左右按键分体 3D 结构与主体分离近景验收', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+
+  await ready(page);
+  await page.getByRole('button', { name: '添加电竞鼠标', exact: true }).click();
+  await page.getByRole('button', { name: '选择颜色 #ec4899', exact: true }).click();
+  await editNumber(page, '左右位置', '-32');
+  await editNumber(page, '前后位置', '18');
+
+  // Deselect mouse so selection wireframe doesn't obscure the close-up macro view
+  await page.getByRole('button', { name: '编辑桌子', exact: true }).click();
+  await page.waitForTimeout(150);
+
+  // Exact front-left 3/4 macro angle matching user's screenshot (front nose at -Z, thumb buttons at -X)
+  await page.evaluate(async () => {
+    const r3fPath = performance
+      .getEntriesByType('resource')
+      .map((entry) => entry.name)
+      .find((url) => new URL(url).pathname.endsWith('/@react-three_fiber.js'))!;
+    const { _roots } = await import(/* @vite-ignore */ r3fPath);
+    const canvas = document.querySelector('canvas')!;
+    const { camera, controls, invalidate } = _roots.get(canvas).store.getState();
+    controls.target.set(-0.32, 0.768, 0.18);
+    camera.fov = 22;
+    camera.position.set(-0.45, 0.855, 0.035);
+    camera.lookAt(-0.32, 0.768, 0.18);
+    camera.updateProjectionMatrix();
+    controls.update();
+    invalidate();
+    await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+  });
+  await page.locator('canvas').screenshot({
+    path: 'C:/Users/Leon/.gemini/antigravity/brain/77106729-550e-46ed-bc9d-f21a6207463d/mouse-split-buttons-pink-closeup.png',
+  });
+
+  // Also capture front-right 3/4 + top-down macro angle to inspect both LMB & RMB symmetry
+  await page.evaluate(async () => {
+    const r3fPath = performance
+      .getEntriesByType('resource')
+      .map((entry) => entry.name)
+      .find((url) => new URL(url).pathname.endsWith('/@react-three_fiber.js'))!;
+    const { _roots } = await import(/* @vite-ignore */ r3fPath);
+    const canvas = document.querySelector('canvas')!;
+    const { camera, controls, invalidate } = _roots.get(canvas).store.getState();
+    controls.target.set(-0.32, 0.768, 0.18);
+    camera.fov = 22;
+    camera.position.set(-0.22, 0.89, 0.02);
+    camera.lookAt(-0.32, 0.768, 0.18);
+    camera.updateProjectionMatrix();
+    controls.update();
+    invalidate();
+    await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+  });
+  await page.locator('canvas').screenshot({
+    path: 'C:/Users/Leon/.gemini/antigravity/brain/77106729-550e-46ed-bc9d-f21a6207463d/mouse-split-buttons-pink-front-right.png',
+  });
+
+  // Low grazing front-right 3/4 macro angle matching media_1795422690819_82c541d3.jpg
+  await page.evaluate(async () => {
+    const r3fPath = performance
+      .getEntriesByType('resource')
+      .map((entry) => entry.name)
+      .find((url) => new URL(url).pathname.endsWith('/@react-three_fiber.js'))!;
+    const { _roots } = await import(/* @vite-ignore */ r3fPath);
+    const canvas = document.querySelector('canvas')!;
+    const { camera, controls, invalidate } = _roots.get(canvas).store.getState();
+    controls.target.set(-0.32, 0.768, 0.165);
+    camera.fov = 20;
+    camera.position.set(-0.185, 0.818, 0.045);
+    camera.lookAt(-0.32, 0.768, 0.165);
+    camera.updateProjectionMatrix();
+    controls.update();
+    invalidate();
+    await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+  });
+  await page.locator('canvas').screenshot({
+    path: 'C:/Users/Leon/.gemini/antigravity/brain/77106729-550e-46ed-bc9d-f21a6207463d/mouse-split-buttons-pink-user-angle.png',
+  });
+
+  expect(errors).toEqual([]);
+});
+
+test('49. 全站去品牌名与中英文双语独立切换验收', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (err) => errors.push(err.message));
+
+  await ready(page);
+
+  const forbiddenBrands =
+    /\b(MacBook|Mac\s*mini|Mac\s*Studio|Apple|Studio\s*Display|Dell|UltraSharp|U2725QE|NB\s*F80|NB\s*F160|NB\s*FP-2|PS5|DualSense|PlayStation|Xbox|Kanto|YU4|Edifier|MR4|Audioengine|Genelec|Twelve\s*South|Curve\s*Flex|Rain\s*Design|mStand|MagSafe|Thunderbolt)\b|苹果|漫步者|雷雳|NB\s*笔记本托盘/i;
+
+  // 1. 默认中文模式：顶栏品牌仅显示中文「桌构」，不并排显示英文；模型库与场景列表全部无品牌名
+  await expect(page).toHaveTitle('桌构 · 三维桌搭工作台');
+  await expect(page.locator('.brand strong')).toHaveText('桌构');
+  await expect(page.locator('.brand small')).toHaveText('给理想生活，留一张桌子');
+  await expect(page.locator('.brand')).not.toContainText('DeskCraft');
+
+  const libTextZh = await page.locator('.library').innerText();
+  expect(libTextZh).not.toMatch(forbiddenBrands);
+
+  // 添加迷你主机、桌面工作站、笔记本托盘等曾含品牌名的设备，切换到场景（项目栏）检查
+  await page.getByRole('button', { name: '添加迷你主机', exact: true }).click();
+  await page.getByRole('button', { name: '添加桌面工作站', exact: true }).click();
+  await page.getByRole('button', { name: /^场景/ }).click();
+  await expect(page.locator('.scene-list')).toContainText('27 寸显示器');
+  await expect(page.locator('.scene-list')).toContainText('轻薄笔记本');
+  await expect(page.locator('.scene-list')).toContainText('迷你主机');
+  await expect(page.locator('.scene-list')).toContainText('桌面工作站');
+
+  const fullBodyZh = await page.locator('body').innerText();
+  expect(fullBodyZh).not.toMatch(forbiddenBrands);
+
+  // 选中轻薄笔记本以同时展示左栏项目栏 + 右栏属性面板中文全貌
+  await page.locator('.scene-row', { hasText: '轻薄笔记本' }).click();
+  await page.waitForTimeout(150);
+  await page.screenshot({
+    path: 'C:/Users/Leon/.gemini/antigravity/brain/77106729-550e-46ed-bc9d-f21a6207463d/bilingual-zh-overview.png',
+  });
+
+  // 2. 点击顶栏语言开关切换为英文模式：全界面切换为纯英文（无中文残留，除语言开关自身的「中文」切回标签外）
+  const langSwitch = page.locator('.lang-toggle[role="switch"]');
+  await expect(langSwitch).toHaveAttribute('aria-checked', 'false');
+  await langSwitch.click();
+  await expect(langSwitch).toHaveAttribute('aria-checked', 'true');
+
+  await expect(page).toHaveTitle('DeskCraft · 3D Workspace Studio');
+  await expect(page.locator('.brand strong')).toHaveText('DeskCraft');
+  await expect(page.locator('.brand small')).toHaveText('Design Your Ideal Workspace');
+  await expect(page.locator('.brand')).not.toContainText('桌构');
+
+  // 项目栏（Scene）中的内置设备名同步切换为英文
+  await expect(page.locator('.scene-list')).toContainText('27" Monitor');
+  await expect(page.locator('.scene-list')).toContainText('Ultrabook');
+  await expect(page.locator('.scene-list')).toContainText('Mini PC');
+  await expect(page.locator('.scene-list')).toContainText('Compact Workstation');
+  await expect(page.locator('.inspector')).toContainText('Item Properties');
+
+  // 检查除语言开关按钮本身外，整页无中文残留且无品牌名残留
+  const nonToggleTextEn = await page.evaluate(() => {
+    const clone = document.body.cloneNode(true) as HTMLElement;
+    clone.querySelectorAll('.lang-toggle').forEach((el) => el.remove());
+    return clone.innerText;
+  });
+  expect(nonToggleTextEn).not.toMatch(forbiddenBrands);
+  expect(nonToggleTextEn).not.toMatch(/[\u4e00-\u9fff]/);
+
+  await page.waitForTimeout(150);
+  await page.screenshot({
+    path: 'C:/Users/Leon/.gemini/antigravity/brain/77106729-550e-46ed-bc9d-f21a6207463d/bilingual-en-overview.png',
+  });
+
+  // 3. 切回模型库检查英文卡片，再点击语言开关切回中文验证双向可逆
+  await page.locator('.library-tabs button').first().click();
+  await expect(page.locator('.library')).toContainText('Ultrabook');
+  await expect(page.locator('.library')).toContainText('Laptop Tray');
+  const libTextEn = await page.locator('.library').innerText();
+  expect(libTextEn).not.toMatch(forbiddenBrands);
+  expect(libTextEn).not.toMatch(/[\u4e00-\u9fff]/);
+
+  await langSwitch.click();
+  await expect(langSwitch).toHaveAttribute('aria-checked', 'false');
+  await expect(page.locator('.brand strong')).toHaveText('桌构');
+  await expect(page.locator('.library')).toContainText('轻薄笔记本');
+  await expect(page.locator('.library')).toContainText('笔记本托盘');
 
   expect(errors).toEqual([]);
 });

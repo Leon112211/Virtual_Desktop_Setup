@@ -1,5 +1,8 @@
+// CS50x Final Project — DeskCraft
+// AI Assistance Disclosure: Developed under the author's design & domain rules with assistance from AI coding tools (see src/App.tsx & README.md).
 import { z } from 'zod';
 import type { Size } from './project';
+import { tr } from '../i18n';
 
 export const mouseSeriesSchema = z.preprocess(
   (val) => (val === 'wired' ? 'wired' : 'wireless'),
@@ -20,57 +23,96 @@ export const mouseSettingsSchema = z.object({
 export type MouseSettings = z.infer<typeof mouseSettingsSchema>;
 
 export type MouseColorOption = {
-  label: string;
+  readonly label: string;
   hex: string;
 };
 
 export type MousePreset = {
   id: MouseModelId;
   series: MouseSeries;
-  seriesLabel: string;
-  label: string;
-  shortLabel: string;
+  readonly seriesLabel: string;
+  readonly label: string;
+  readonly shortLabel: string;
   weightG: number;
   ergo: 'symmetrical';
   size: Size;
   colors: MouseColorOption[];
-  description: string;
+  readonly description: string;
 };
+
+const MOUSE_COLOR_LIST: MouseColorOption[] = [
+  {
+    get label() {
+      return tr('曜石黑', 'Obsidian Black');
+    },
+    hex: '#1e2126',
+  },
+  {
+    get label() {
+      return tr('云朵白', 'Cloud White');
+    },
+    hex: '#f2f4f7',
+  },
+  {
+    get label() {
+      return tr('品红粉', 'Magenta Pink');
+    },
+    hex: '#ec4899',
+  },
+  {
+    get label() {
+      return tr('朱砂红', 'Crimson Red');
+    },
+    hex: '#c62828',
+  },
+];
 
 export const MOUSE_PRESETS: MousePreset[] = [
   {
     id: 'classic-wireless',
     series: 'wireless',
-    seriesLabel: '无线款',
-    label: '经典无线鼠标（125 × 63.5 × 40 mm）',
-    shortLabel: '经典无线款',
+    get seriesLabel() {
+      return tr('无线款', 'Wireless');
+    },
+    get label() {
+      return tr('经典无线鼠标（125 × 63.5 × 40 mm）', 'Wireless Mouse (125 × 63.5 × 40 mm)');
+    },
+    get shortLabel() {
+      return tr('经典无线款', 'Wireless');
+    },
     weightG: 60,
     ergo: 'symmetrical',
     size: { width: 0.0635, height: 0.04, depth: 0.125 },
-    colors: [
-      { label: '曜石黑', hex: '#1e2126' },
-      { label: '云朵白', hex: '#f2f4f7' },
-      { label: '品红粉', hex: '#ec4899' },
-      { label: '朱砂红', hex: '#c62828' },
-    ],
-    description: '125 × 63.5 × 40 mm 经典对称收腰万金油模具 · U 型内嵌分体按键盖与双白边刻度滚轮',
+    colors: MOUSE_COLOR_LIST,
+    get description() {
+      return tr(
+        '125 × 63.5 × 40 mm 对称收腰模具 · U 型内嵌分体按键盖与双白边刻度滚轮',
+        '125 × 63.5 × 40 mm symmetrical shell · U-inset split click plates & dual-rimmed wheel',
+      );
+    },
   },
   {
     id: 'classic-wired',
     series: 'wired',
-    seriesLabel: '有线款',
-    label: '经典有线鼠标（超柔编织伞绳线）',
-    shortLabel: '经典有线款',
+    get seriesLabel() {
+      return tr('有线款', 'Wired');
+    },
+    get label() {
+      return tr('经典有线鼠标（超柔编织伞绳线）', 'Wired Mouse (Braided Paracord)');
+    },
+    get shortLabel() {
+      return tr('经典有线款', 'Wired');
+    },
     weightG: 65,
     ergo: 'symmetrical',
     size: { width: 0.0635, height: 0.04, depth: 0.125 },
-    colors: [
-      { label: '曜石黑', hex: '#1e2126' },
-      { label: '云朵白', hex: '#f2f4f7' },
-      { label: '品红粉', hex: '#ec4899' },
-      { label: '朱砂红', hex: '#c62828' },
-    ],
-    description: '125 × 63.5 × 40 mm 经典对称收腰模具 · 前端 6° 上扬防拉扯护套与超柔编织伞绳线',
+    colors: MOUSE_COLOR_LIST,
+    get description() {
+      return tr(
+        '125 × 63.5 × 40 mm 对称收腰模具 · 前端 6° 上扬防拉扯护套与超柔编织伞绳线',
+        '125 × 63.5 × 40 mm symmetrical shell · 6° angled strain-relief boot & braided paracord',
+      );
+    },
   },
 ];
 

@@ -1,3 +1,5 @@
+// CS50x Final Project — DeskCraft
+// AI Assistance Disclosure: Developed under the author's design & domain rules with assistance from AI coding tools (see src/App.tsx & README.md).
 import { Vector3 } from 'three';
 import {
   findContainingHole,
@@ -12,6 +14,10 @@ export type CableGuideAnchor = {
   pinned: boolean;
   /** True for non-deformable physical locks (port boots, arm clips, pass-through holes). */
   hardPin?: boolean;
+  /** True when locked inside an elevated rigid conduit/clip channel (e.g. monitor arm channel). */
+  armChannel?: boolean;
+  /** Optional cap on surplus slack allocated to the span adjacent to this anchor. */
+  maxSpanSlackM?: number;
   /** Optional unit exit tangent from a pin (port boot or through-hole channel). */
   tangent?: Vector3;
   /** User-edited waypoint: attracts horizontally (XZ) while still obeying gravity (-Y). */
@@ -382,6 +388,7 @@ export function solveStaticCablePhysics(params: SolveStaticCableParams): SolveSt
     guideNodes: { dist: number; x: number; z: number }[];
     geoLen: number;
     fixedExact: boolean;
+    maxSlack?: number;
     targetLen: number;
   };
   const spans: Span[] = [];
@@ -391,6 +398,8 @@ export function solveStaticCablePhysics(params: SolveStaticCableParams): SolveSt
   for (let s = 0; s < pinIndices.length - 1; s++) {
     const startIdx = pinIndices[s];
     const endIdx = pinIndices[s + 1];
+    const startAnchor = anchors[startIdx];
+    const endAnchor = anchors[endIdx];
     const slice = anchors.slice(startIdx, endIdx + 1);
     const guidePts = slice.map((a) => a.point.clone());
     const guideNodes: { dist: number; x: number; z: number }[] = [];
@@ -408,28 +417,46 @@ export function solveStaticCablePhysics(params: SolveStaticCableParams): SolveSt
       (s === 0 ||
         s === pinIndices.length - 2 ||
         Boolean(findContainingHole(guidePts[0], radius, holes)));
+    const lockedArmSpan = Boolean(startAnchor.armChannel && endAnchor.armChannel);
+    const fixedExact = shortPinnedStub || lockedArmSpan;
+    const rawCap = Math.min(
+      startAnchor.maxSpanSlackM ?? Infinity,
+      endAnchor.maxSpanSlackM ?? Infinity,
+    );
+    const maxSlack = Number.isFinite(rawCap) ? rawCap : undefined;
     spans.push({
       guidePts,
       guideNodes,
       geoLen,
-      fixedExact: shortPinnedStub,
+      fixedExact,
+      ...(maxSlack !== undefined ? { maxSlack } : {}),
       targetLen: geoLen,
     });
     totalGeoLen += geoLen;
-    if (!shortPinnedStub) adjustableGeoLen += geoLen;
+    if (!fixedExact && maxSlack === undefined) adjustableGeoLen += geoLen;
   }
 
   const slack = Math.max(0, bodyM - totalGeoLen);
-  if (slack > 0.005 && adjustableGeoLen > 1e-4) {
-    for (let s = 0; s < spans.length; s++) {
-      const sp = spans[s];
-      if (sp.fixedExact) continue;
-      if (freeTail) {
-        const isLastSpan = s === spans.length - 1;
-        const share = isLastSpan ? 0.68 : 0.32 * (sp.geoLen / Math.max(1e-4, adjustableGeoLen));
-        sp.targetLen = sp.geoLen + slack * (spans.length <= 2 && isLastSpan ? 0.85 : share);
-      } else {
-        sp.targetLen = sp.geoLen + slack * (sp.geoLen / adjustableGeoLen);
+  if (slack > 0.005) {
+    let remainingSlack = slack;
+    for (const sp of spans) {
+      if (sp.fixedExact || sp.maxSlack === undefined) continue;
+      const add = Math.min(sp.maxSlack, remainingSlack * 0.14);
+      sp.targetLen = sp.geoLen + add;
+      remainingSlack = Math.max(0, remainingSlack - add);
+    }
+    if (remainingSlack > 0.003 && adjustableGeoLen > 1e-4) {
+      for (let s = 0; s < spans.length; s++) {
+        const sp = spans[s];
+        if (sp.fixedExact || sp.maxSlack !== undefined) continue;
+        if (freeTail) {
+          const isLastSpan = s === spans.length - 1;
+          const share = isLastSpan ? 0.68 : 0.32 * (sp.geoLen / Math.max(1e-4, adjustableGeoLen));
+          sp.targetLen =
+            sp.geoLen + remainingSlack * (spans.length <= 2 && isLastSpan ? 0.85 : share);
+        } else {
+          sp.targetLen = sp.geoLen + remainingSlack * (sp.geoLen / adjustableGeoLen);
+        }
       }
     }
   }
@@ -688,7 +715,15 @@ export function solveStaticCablePhysics(params: SolveStaticCableParams): SolveSt
     }
   }
 
-  const swept = resolveSegmentClearance(mergedNodes, radius, solids, holes, allowedItemIds);
+  const armChannelRefs = anchors.filter((a) => a.armChannel).map((a) => a.point.clone());
+  const swept = resolveSegmentClearance(
+    mergedNodes,
+    radius,
+    solids,
+    holes,
+    allowedItemIds,
+    armChannelRefs,
+  );
   if (swept.adjusted) collisionAdjusted = true;
   const hardRefs = mergedNodes.filter((_, idx) => mergedHard[idx]);
   let finalPoints = simplifyCollinearPoints(swept.points, hardRefs);
@@ -701,6 +736,7 @@ export function solveStaticCablePhysics(params: SolveStaticCableParams): SolveSt
     const conservRes = layoutFixedSurplusLoop(
       finalPoints,
       hardRefs,
+      armChannelRefs,
       bodyM,
       radius,
       minInteriorAngleDeg,
@@ -738,11 +774,55 @@ export function solveStaticCablePhysics(params: SolveStaticCableParams): SolveSt
       )
     ) {
       finalPoints = simplifyCollinearPoints(
-        resolveSegmentClearance(finalPoints, radius, solids, holes, allowedItemIds).points,
+        resolveSegmentClearance(finalPoints, radius, solids, holes, allowedItemIds, armChannelRefs)
+          .points,
         hardRefs,
       );
       collisionAdjusted = true;
     }
+  }
+
+  // Ensure coaxial strain-relief bend radius immediately outside both connector boots without disturbing coils
+  const reinforceBootRelief = (
+    pivotIdx: number,
+    tipIdx: number,
+    freeIdx: number,
+    insertAt: number,
+  ) => {
+    if (freeIdx < 0 || freeIdx >= finalPoints.length) return;
+    const tip = finalPoints[tipIdx];
+    const pivot = finalPoints[pivotIdx];
+    const free = finalPoints[freeIdx];
+    const outDir = new Vector3().subVectors(pivot, tip);
+    const toFree = new Vector3().subVectors(free, pivot);
+    const outLen = outDir.length();
+    const freeDist = toFree.length();
+    if (outLen < 1e-5 || freeDist < 0.004) return;
+    outDir.divideScalar(outLen);
+    const cosOut = outDir.dot(toFree) / freeDist; // +1 = 180° straight exit
+    if (cosOut >= 0.74) return; // already >= 138° interior angle
+    // Bisect the turn at 42% of freeDist so BOTH pivot and inserted relief vertex stay smoothly obtuse
+    const halfDir = outDir
+      .clone()
+      .addScaledVector(toFree, 1 / freeDist)
+      .normalize();
+    const step = Math.min(0.02, freeDist * 0.42);
+    const rawSr = pivot.clone().addScaledVector(halfDir, step);
+    const clr = projectCablePointWithSupport(rawSr, pivot.y, radius, solids, holes, allowedItemIds);
+    if (clr.point.distanceTo(pivot) > 0.002 && clr.point.distanceTo(free) > 0.002) {
+      finalPoints.splice(insertAt, 0, clr.point);
+    }
+  };
+  if (!freeTail && finalPoints.length >= 4) {
+    reinforceBootRelief(
+      finalPoints.length - 2,
+      finalPoints.length - 1,
+      finalPoints.length - 3,
+      finalPoints.length - 2,
+    );
+  }
+  if (finalPoints.length >= 4) {
+    reinforceBootRelief(1, 0, 2, 2);
   }
 
   const finalLen = polylineLength(finalPoints);
@@ -762,6 +842,7 @@ export function solveStaticCablePhysics(params: SolveStaticCableParams): SolveSt
 function layoutFixedSurplusLoop(
   basePts: Vector3[],
   hardRefs: readonly Vector3[],
+  armChannelRefs: readonly Vector3[],
   bodyM: number,
   radius: number,
   minInteriorAngleDeg: number,
@@ -816,7 +897,14 @@ function layoutFixedSurplusLoop(
         const tip = floorPts[floorPts.length - 1];
         floorPts.push(new Vector3(tip.x - dir.x * rem, floorY, tip.z - dir.z * rem));
       }
-      const cleared = resolveSegmentClearance(floorPts, radius, solids, holes, allowedItemIds);
+      const cleared = resolveSegmentClearance(
+        floorPts,
+        radius,
+        solids,
+        holes,
+        allowedItemIds,
+        armChannelRefs,
+      );
       const pinnedFloor = cleared.points.map((p, idx) =>
         isPinnedRef(p, idx, cleared.points.length),
       );
@@ -852,6 +940,10 @@ function layoutFixedSurplusLoop(
   for (let i = startIdx; i <= endIdx; i++) {
     const a = basePts[i];
     const b = basePts[i + 1];
+    const bothHard =
+      hardRefs.some((h) => h.distanceToSquared(a) < 1e-6) &&
+      hardRefs.some((h) => h.distanceToSquared(b) < 1e-6);
+    if (bothHard) continue;
     const d = a.distanceTo(b);
     if (d < 0.06) continue;
     const isFlat = Math.abs(a.y - b.y) < 0.045;
@@ -876,10 +968,27 @@ function layoutFixedSurplusLoop(
   if (perp.lengthSq() < 1e-5) perp.set(0, 0, -1);
   else perp.normalize();
 
+  const surfaceSlabs = solids.filter((s) => s.kind === 'desk' || s.kind === 'shelf');
+  const isPointOnSlab = (pt: Vector3, margin: number): boolean =>
+    surfaceSlabs.some((s) => {
+      if (pt.y < s.maxY - 0.015 || pt.y > s.maxY + 0.06) return false;
+      const c = Math.cos(s.yaw);
+      const sn = Math.sin(s.yaw);
+      const dx = pt.x - s.cx;
+      const dz = pt.z - s.cz;
+      const lx = dx * c - dz * sn;
+      const lz = dx * sn + dz * c;
+      return Math.abs(lx) <= s.halfW - margin && Math.abs(lz) <= s.halfD - margin;
+    });
+  const segOnSlab = isPointOnSlab(segMid, 0.005);
+
   const measureFreeDist = (dir: Vector3): number => {
     const probe = segMid.clone();
     for (let d = 0.03; d <= 0.42; d += 0.025) {
       probe.copy(segMid).addScaledVector(dir, d);
+      if (segOnSlab && !isPointOnSlab(probe, radius + 0.028)) {
+        return Math.max(0.02, d - 0.025);
+      }
       const clr = projectCablePointClear(probe, radius + 0.002, solids, holes, allowedItemIds);
       if (clr.adjusted && clr.point.distanceTo(probe) > 0.004) {
         return Math.max(0.02, d - 0.025);
@@ -892,10 +1001,11 @@ function layoutFixedSurplusLoop(
   const negPerp = posPerp.clone().negate();
   const posClear = measureFreeDist(posPerp);
   const negClear = measureFreeDist(negPerp);
-  const bestDir = posClear >= 0.09 || posClear >= negClear ? posPerp : negPerp;
-  const maxAmp = Math.max(posClear, negClear);
-
   const excess = bodyM - polylineLength(basePts);
+  const preferPos =
+    (posClear >= 0.12 && posClear >= Math.min(0.18, excess * 0.5)) || posClear >= negClear;
+  const bestDir = preferPos ? posPerp : negPerp;
+  const maxAmp = preferPos ? posClear : negClear;
 
   const buildArch = (amp: number): Vector3[] => {
     const archPts: Vector3[] = [];
@@ -916,15 +1026,18 @@ function layoutFixedSurplusLoop(
     }
     archPts.push(aEnd);
     for (let i = bestIdx + 1; i < basePts.length; i++) archPts.push(basePts[i].clone());
-    return resolveSegmentClearance(archPts, radius, solids, holes, allowedItemIds).points;
+    return resolveSegmentClearance(archPts, radius, solids, holes, allowedItemIds, armChannelRefs)
+      .points;
   };
 
-  // Try single smooth U-arch first if spare slack fits cleanly inside free space
-  const archMaxPts = buildArch(Math.min(maxAmp, Math.max(0.04, excess * 0.72)));
+  // Try single smooth U-arch first ONLY when shallow (amp <= 0.26 * chord); larger surplus forms a tidy flat coil
+  const maxArchAmp = Math.min(maxAmp, chord * 0.26, 0.11);
+  const archCap = Math.min(maxArchAmp, Math.max(0.03, excess * 0.72));
+  const archMaxPts = buildArch(archCap);
   const archMaxLen = polylineLength(archMaxPts);
   if (archMaxLen >= targetMin) {
     let lo = 0;
-    let hi = Math.min(maxAmp, Math.max(0.04, excess * 0.72));
+    let hi = archCap;
     let bestPts = archMaxPts;
     for (let iter = 0; iter < 10; iter++) {
       const midAmp = (lo + hi) * 0.5;
@@ -995,7 +1108,14 @@ function layoutFixedSurplusLoop(
     const exit = new Vector3().lerpVectors(pA, pB, 0.86);
     cPts.push(exit);
     for (let i = bestIdx + 1; i < basePts.length; i++) cPts.push(basePts[i].clone());
-    const cleared = resolveSegmentClearance(cPts, radius, solids, holes, allowedItemIds).points;
+    const cleared = resolveSegmentClearance(
+      cPts,
+      radius,
+      solids,
+      holes,
+      allowedItemIds,
+      armChannelRefs,
+    ).points;
     const pinnedCoil = cleared.map((p, idx) => isPinnedRef(p, idx, cleared.length));
     relaxNonAcuteBends(
       cleared,
@@ -1013,6 +1133,7 @@ function layoutFixedSurplusLoop(
       solids,
       holes,
       allowedItemIds,
+      armChannelRefs,
     ).points;
     const cleaned = simplifyCollinearPoints(reCleared, hardRefs);
     if (minCableInteriorAngleDeg(cleaned) < 96) {

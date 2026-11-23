@@ -1,3 +1,5 @@
+// CS50x Final Project — DeskCraft
+// AI Assistance Disclosure: Developed under the author's design & domain rules with assistance from AI coding tools (see src/App.tsx & README.md).
 import { useEffect, useMemo } from 'react';
 import { RoundedBox } from '@react-three/drei';
 import { ExtrudeGeometry, Path, Shape } from 'three';

@@ -1,3 +1,5 @@
+// CS50x Final Project — DeskCraft
+// AI Assistance Disclosure: Developed under the author's design & domain rules with assistance from AI coding tools (see src/App.tsx & README.md).
 // Remove the retired built-in when opening projects saved by earlier versions.
 // Leave every other value untouched so normal schema validation still applies.
 export function removeRetiredItems(value: unknown): unknown {

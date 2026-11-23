@@ -1,8 +1,11 @@
+// CS50x Final Project — DeskCraft
+// AI Assistance Disclosure: Developed under the author's design & domain rules with assistance from AI coding tools (see src/App.tsx & README.md).
 import { describe, it, expect, beforeEach } from 'vitest';
 import { cm, meters, projectSchema } from './project';
 import { defaultProject, makeItem } from './catalog';
 import { isOutOfBounds, itemWorldY } from './placement';
 import { useEditor } from '../store/editorStore';
+import { useI18n } from '../i18n';
 describe('尺寸与放置', () => {
   it('厘米与米保持明确换算', () => {
     expect(meters(75)).toBe(0.75);
@@ -153,14 +156,54 @@ describe('编辑历史', () => {
     s().undo();
     expect(s().project.items[0].x).toBe(-0.16);
   });
-  it('初始场景只保留 27 寸显示器与 MacBook 并默认插好 Type-C 连线', () => {
+  it('初始场景只保留 27 寸显示器与轻薄笔记本并默认插好 Type-C 连线', () => {
+    useI18n.getState().setLang('zh');
     const p = defaultProject();
     expect(p.items.map((i) => i.kind)).toEqual(['monitor', 'macbook']);
+    expect(p.items.map((i) => i.name)).toEqual(['27 寸显示器', '轻薄笔记本']);
     expect(p.cables).toHaveLength(1);
     const cable = p.cables![0];
     expect(cable.kind).toBe('usbc');
     expect(cable.fromPlugType).toBe('usbc');
     expect(cable.toPlugType).toBe('usbc');
     expect(projectSchema.safeParse(p).success).toBe(true);
+  });
+  it('加载旧版含品牌名工程自动去品牌化，中英文切换同步更新内置名称且保留用户自定义名称', () => {
+    useI18n.getState().setLang('zh');
+    const legacy = defaultProject();
+    legacy.name = '我的桌面';
+    legacy.items[1].name = 'MacBook';
+    const mini = makeItem('macMini');
+    mini.name = 'Mac mini 副本';
+    const custom = makeItem('speaker');
+    custom.name = '书房左声道';
+    legacy.items.push(mini, custom);
+
+    useEditor.getState().replace(legacy, new Map());
+    expect(useEditor.getState().project.name).toBe('我的理想桌搭');
+    expect(useEditor.getState().project.items.map((i) => i.name)).toEqual([
+      '27 寸显示器',
+      '轻薄笔记本',
+      '迷你主机 副本',
+      '书房左声道',
+    ]);
+
+    useI18n.getState().setLang('en');
+    expect(useEditor.getState().project.name).toBe('My Ideal Desk Setup');
+    expect(useEditor.getState().project.items.map((i) => i.name)).toEqual([
+      '27" Monitor',
+      'Ultrabook',
+      'Mini PC Copy',
+      '书房左声道',
+    ]);
+
+    useI18n.getState().setLang('zh');
+    expect(useEditor.getState().project.name).toBe('我的理想桌搭');
+    expect(useEditor.getState().project.items.map((i) => i.name)).toEqual([
+      '27 寸显示器',
+      '轻薄笔记本',
+      '迷你主机 副本',
+      '书房左声道',
+    ]);
   });
 });

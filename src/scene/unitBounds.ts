@@ -1,3 +1,5 @@
+// CS50x Final Project — DeskCraft
+// AI Assistance Disclosure: Developed under the author's design & domain rules with assistance from AI coding tools (see src/App.tsx & README.md).
 import { Box3, Matrix4, Mesh, Object3D, Vector3 } from 'three';
 
 /** Measure in the content root's coordinates, independent of the desk/item transforms. */

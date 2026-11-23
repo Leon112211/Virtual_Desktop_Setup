@@ -1,3 +1,5 @@
+// CS50x Final Project — DeskCraft
+// AI Assistance Disclosure: Developed under the author's design & domain rules with assistance from AI coding tools (see src/App.tsx & README.md).
 import { useState } from 'react';
 import {
   Cable as CableIcon,
@@ -125,6 +127,7 @@ import {
   PLUG_SPEC_META,
   plugSpecValues,
   POWER_OUTLET_LABELS,
+  POWER_STRIP_CORD_LENGTHS,
   POWER_STRIP_LAYOUT_META,
   powerOutletTypeValues,
   powerStripLayoutValues,
@@ -142,6 +145,7 @@ import {
   type SpeakerSettings,
 } from '../domain/speaker';
 import { cm, meters, type SceneItem } from '../domain/project';
+import { useI18n } from '../i18n';
 import { useEditor } from '../store/editorStore';
 import { NumberField } from './NumberField';
 
@@ -152,7 +156,9 @@ export function SurfacePlacementField({
   item: SceneItem;
   onSafe: (fn: () => void) => void;
 }) {
-  const { project, updateItem, commit } = useEditor();
+  const { lang } = useI18n();
+  const t = (zh: string, en: string) => (lang === 'en' ? en : zh);
+  const { project, updateItem } = useEditor();
   if (
     project.desk.return ||
     !project.desk.shelf?.enabled ||
@@ -168,16 +174,16 @@ export function SurfacePlacementField({
   return (
     <section className="property-section">
       <h4>
-        <Layers size={15} /> 放置层面
+        <Layers size={15} /> {t('放置层面', 'Surface Layer')}
       </h4>
-      <div className="desk-shape-presets" role="group" aria-label="放置层面">
+      <div className="desk-shape-presets" role="group" aria-label={t('放置层面', 'Surface Layer')}>
         <button
           type="button"
           className={!onShelf ? 'active' : ''}
           aria-pressed={!onShelf}
           onClick={() => onSafe(() => updateItem(item.id, { surface: undefined }))}
         >
-          主桌面
+          {t('主桌面', 'Main Desktop')}
         </button>
         <button
           type="button"
@@ -185,7 +191,7 @@ export function SurfacePlacementField({
           aria-pressed={onShelf}
           onClick={() => onSafe(() => updateItem(item.id, { surface: 'shelf' }))}
         >
-          等宽层架
+          {t('等宽层架', 'Riser Shelf')}
         </button>
       </div>
     </section>
@@ -199,6 +205,8 @@ export function PegboardInspectorSection({
   item: SceneItem;
   onSafe: (fn: () => void) => void;
 }) {
+  const { lang } = useI18n();
+  const t = (zh: string, en: string) => (lang === 'en' ? en : zh);
   const { project, commit, updateItem } = useEditor();
   if (item.kind !== 'pegboard') return null;
 
@@ -238,16 +246,20 @@ export function PegboardInspectorSection({
   return (
     <section className="property-section">
       <h4>
-        <Layers size={15} /> 安装方式
+        <Layers size={15} /> {t('安装方式', 'Mounting Mode')}
       </h4>
-      <div className="desk-shape-presets" role="group" aria-label="洞洞板安装方式">
+      <div
+        className="desk-shape-presets"
+        role="group"
+        aria-label={t('洞洞板安装方式', 'Pegboard Mount')}
+      >
         <button
           type="button"
           className={!isWall ? 'active' : ''}
           aria-pressed={!isWall}
           onClick={() => setMountMode(false)}
         >
-          桌面立放
+          {t('桌面立放', 'Desk Stand')}
         </button>
         <button
           type="button"
@@ -255,13 +267,13 @@ export function PegboardInspectorSection({
           aria-pressed={isWall}
           onClick={() => setMountMode(true)}
         >
-          墙面壁挂
+          {t('墙面壁挂', 'Wall Mount')}
         </button>
       </div>
       {isWall && (
         <div style={{ marginTop: 10 }}>
           <NumberField
-            label="挂墙高度（距桌面）"
+            label={t('挂墙高度（距桌面）', 'Height Above Desk')}
             value={cm(item.wallY ?? PEGBOARD_WALL_DEFAULT_Y)}
             min={2}
             max={maxWallY}
@@ -272,8 +284,14 @@ export function PegboardInspectorSection({
       )}
       <p className="field-note">
         {isWall
-          ? '壁挂模式自动隐藏桌腿、配备墙面横挂导轨与支距垫，可直接沿墙面上下左右拖动定位（未开墙面将自动开启桌后墙体）。'
-          : '桌面模式底部带防滑支架脚，支持在桌面自由拖动与旋转角度。'}
+          ? t(
+              '壁挂模式自动隐藏桌腿、配备墙面横挂导轨与支距垫，可直接沿墙面上下左右拖动定位（未开墙面将自动开启桌后墙体）。',
+              'Wall mode hides desk feet and attaches via wall rails; drag directly along the backdrop wall.',
+            )
+          : t(
+              '桌面模式底部带防滑支架脚，支持在桌面自由拖动与旋转角度。',
+              'Desk mode includes freestanding feet for free placement and rotation on the desktop.',
+            )}
       </p>
     </section>
   );
@@ -286,6 +304,8 @@ export function LaptopInspectorSection({
   item: SceneItem;
   onSafe: (fn: () => void) => void;
 }) {
+  const { lang } = useI18n();
+  const t = (zh: string, en: string) => (lang === 'en' ? en : zh);
   const { project, updateItem } = useEditor();
   const isGaming = item.kind === 'gamingLaptop';
   const isMacbook = item.kind === 'macbook';
@@ -303,9 +323,16 @@ export function LaptopInspectorSection({
   return (
     <section className="property-section">
       <h4>
-        <Laptop size={15} /> {isMacMini ? '机型尺寸预设' : '机型与屏幕开合'}
+        <Laptop size={15} />{' '}
+        {isMacMini
+          ? t('机身尺寸预设', 'Chassis Presets')
+          : t('机型与屏幕开合', 'Model & Lid Angle')}
       </h4>
-      <div className="monitor-presets wrap-presets" role="group" aria-label="机型尺寸预设">
+      <div
+        className="monitor-presets wrap-presets"
+        role="group"
+        aria-label={t('机型尺寸预设', 'Model Presets')}
+      >
         {presets.map((p) => (
           <button
             key={p.id}
@@ -328,7 +355,7 @@ export function LaptopInspectorSection({
         <div
           className="desk-shape-presets"
           role="group"
-          aria-label="14 寸 MacBook Pro 机身版本"
+          aria-label={t('14 寸轻薄本机身版本', '14" Chassis Variant')}
           style={{ marginTop: 8 }}
         >
           {([MACBOOK_PRO_14_VARIANTS.standard, MACBOOK_PRO_14_VARIANTS.proled] as const).map(
@@ -360,7 +387,7 @@ export function LaptopInspectorSection({
       {(isGaming || isMacbook) && (
         <div style={{ marginTop: 14 }}>
           <NumberField
-            label="屏幕开合角"
+            label={t('屏幕开合角', 'Lid Angle')}
             value={isVertical ? 0 : (item.lidAngle ?? DEFAULT_LID_ANGLE)}
             min={0}
             max={MAX_LID_ANGLE}
@@ -370,8 +397,9 @@ export function LaptopInspectorSection({
           />
           {boundStand && (
             <p className="field-note">
-              当前已放置于「{boundStand.name}」
-              {isVertical ? '（立式收纳已自动合盖）' : '，随支架同步移动'}。
+              {lang === 'en'
+                ? `Mounted on "${boundStand.name}"${isVertical ? ' (closed in vertical dock)' : ', moves together with stand'}.`
+                : `当前已放置于「${boundStand.name}」${isVertical ? '（立式收纳已自动合盖）' : '，随支架同步移动'}。`}
             </p>
           )}
         </div>
@@ -387,6 +415,8 @@ export function LaptopStandInspector({
   item: SceneItem;
   onSafe: (fn: () => void) => void;
 }) {
+  const { lang } = useI18n();
+  const t = (zh: string, en: string) => (lang === 'en' ? en : zh);
   const { project, updateItem } = useEditor();
   const stand = item.laptopStand;
   if (!stand) return null;
@@ -418,16 +448,20 @@ export function LaptopStandInspector({
   return (
     <section className="property-section">
       <h4>
-        <Laptop size={15} /> 支架模式与承托设备
+        <Laptop size={15} /> {t('支架模式与承托设备', 'Stand Mode & Bound Laptop')}
       </h4>
-      <div className="desk-shape-presets" role="group" aria-label="笔记本支架模式">
+      <div
+        className="desk-shape-presets"
+        role="group"
+        aria-label={t('笔记本支架模式', 'Laptop Stand Mode')}
+      >
         <button
           type="button"
           className={stand.mode === 'tilted' ? 'active' : ''}
           aria-pressed={stand.mode === 'tilted'}
           onClick={() => update({ mode: 'tilted' })}
         >
-          斜面增高
+          {t('斜面增高', 'Tilted Riser')}
         </button>
         <button
           type="button"
@@ -435,13 +469,17 @@ export function LaptopStandInspector({
           aria-pressed={stand.mode === 'vertical'}
           onClick={() => update({ mode: 'vertical' })}
         >
-          立式收纳
+          {t('立式收纳', 'Vertical Dock')}
         </button>
       </div>
 
       {stand.mode === 'tilted' && (
         <div style={{ marginTop: 12 }}>
-          <div className="desk-shape-presets" role="group" aria-label="笔记本支架款式">
+          <div
+            className="desk-shape-presets"
+            role="group"
+            aria-label={t('笔记本支架款式', 'Stand Style')}
+          >
             {(['curveFlex', 'mStand'] as const).map((modelId) => (
               <button
                 key={modelId}
@@ -461,14 +499,14 @@ export function LaptopStandInspector({
       )}
 
       <label className="text-field" style={{ marginTop: 14 }}>
-        承托笔记本
+        {t('承托笔记本', 'Bound Laptop')}
         <select
-          aria-label="承托笔记本"
+          aria-label={t('承托笔记本', 'Bound Laptop')}
           className="inspector-select"
           value={stand.laptopId ?? ''}
           onChange={(e) => update({ laptopId: e.target.value || undefined })}
         >
-          <option value="">暂不绑定笔记本</option>
+          <option value="">{t('暂不绑定笔记本', 'Unbound')}</option>
           {laptops.map((lap) => {
             const occupied = project.items.some(
               (other) => other.id !== item.id && other.laptopStand?.laptopId === lap.id,
@@ -476,7 +514,7 @@ export function LaptopStandInspector({
             return (
               <option key={lap.id} value={lap.id} disabled={occupied}>
                 {lap.name}
-                {occupied ? '（已在其他支架上）' : ''}
+                {occupied ? t('（已在其他支架上）', ' (Occupied)') : ''}
               </option>
             );
           })}
@@ -486,7 +524,7 @@ export function LaptopStandInspector({
       {stand.mode === 'tilted' && activeModel === 'curveFlex' && (
         <div className="field-grid" style={{ marginTop: 14 }}>
           <NumberField
-            label="抬高高度"
+            label={t('抬高高度', 'Elevation')}
             value={cm(stand.elevation)}
             min={3}
             max={27.4}
@@ -494,7 +532,7 @@ export function LaptopStandInspector({
             onChange={(v) => update({ elevation: meters(v) })}
           />
           <NumberField
-            label="倾斜角度"
+            label={t('倾斜角度', 'Tilt Angle')}
             value={stand.tiltDeg}
             min={0}
             max={45}
@@ -506,10 +544,19 @@ export function LaptopStandInspector({
       )}
       <p className="field-note">
         {stand.mode === 'vertical'
-          ? '立式收纳会将绑定的笔记本自动合盖并竖直夹持在底座槽内。'
+          ? t(
+              '立式收纳会将绑定的笔记本自动合盖并竖直夹持在底座槽内。',
+              'Vertical dock closes the bound laptop and holds it upright inside the cradle.',
+            )
           : activeModel === 'mStand'
-            ? '一体成形铝合金 150 mm 固定高度与 18° 人体工学倾角，后部配备 Ø50.8 mm 理线孔。'
-            : '拖动或旋转支架时，绑定的笔记本会随之同步抬高与倾斜（支持 30–274 mm 高度与 0°–45° 倾角）。'}
+            ? t(
+                '一体成形铝合金 150 mm 固定高度与 18° 人体工学倾角，后部配备 Ø50.8 mm 理线孔。',
+                'Unibody aluminum 150 mm fixed height at 18° ergonomic tilt with Ø50.8 mm cable hole.',
+              )
+            : t(
+                '拖动或旋转支架时，绑定的笔记本会随之同步抬高与倾斜（支持 30–274 mm 高度与 0°–45° 倾角）。',
+                'Moving or rotating the stand moves the bound laptop together (30–274 mm height, 0°–45° tilt).',
+              )}
       </p>
     </section>
   );
@@ -522,6 +569,8 @@ export function MonitorArmInspector({
   item: SceneItem;
   onSafe: (fn: () => void) => void;
 }) {
+  const { lang } = useI18n();
+  const t = (zh: string, en: string) => (lang === 'en' ? en : zh);
   const { project, updateItem, collisionEnabled, setCollisionNotice } = useEditor();
   const arm = item.monitorArm;
   if (!arm) return null;
@@ -636,7 +685,12 @@ export function MonitorArmInspector({
       const m = monitors.find((cand) => !isMonitorBusy(cand.id, 'primary'));
       if (!m) {
         onSafe(() => {
-          throw new Error('没有空闲显示器可挂载到主臂，请先添加一台显示器。');
+          throw new Error(
+            t(
+              '没有空闲显示器可挂载到主臂，请先添加一台显示器。',
+              'No free monitor available for the primary arm.',
+            ),
+          );
         });
         return;
       }
@@ -645,7 +699,12 @@ export function MonitorArmInspector({
       const l = laptops.find((cand) => !isLaptopBusy(cand.id, 'primary'));
       if (!l) {
         onSafe(() => {
-          throw new Error('没有空闲笔记本可放置到主臂托盘，请先添加一台笔记本。');
+          throw new Error(
+            t(
+              '没有空闲笔记本可放置到主臂托盘，请先添加一台笔记本。',
+              'No free laptop available for the primary arm tray.',
+            ),
+          );
         });
         return;
       }
@@ -666,7 +725,12 @@ export function MonitorArmInspector({
       const m = monitors.find((cand) => !isMonitorBusy(cand.id, 'secondary'));
       if (!m) {
         onSafe(() => {
-          throw new Error('没有空闲的第二台显示器，请先添加到场景。');
+          throw new Error(
+            t(
+              '没有空闲的第二台显示器，请先添加到场景。',
+              'No free second monitor available in the scene.',
+            ),
+          );
         });
         return;
       }
@@ -675,7 +739,12 @@ export function MonitorArmInspector({
       const l = laptops.find((cand) => !isLaptopBusy(cand.id, 'secondary'));
       if (!l) {
         onSafe(() => {
-          throw new Error('没有空闲笔记本可放置在 NB 托盘上，请先添加游戏本或 MacBook。');
+          throw new Error(
+            t(
+              '没有空闲笔记本可放置在笔记本托盘上，请先添加游戏本或轻薄笔记本。',
+              'No free laptop available for the laptop tray. Add a laptop first.',
+            ),
+          );
         });
         return;
       }
@@ -694,16 +763,20 @@ export function MonitorArmInspector({
   return (
     <section className="property-section">
       <h4>
-        <Monitor size={15} /> 支架臂结构与安装方式
+        <Monitor size={15} /> {t('支架臂结构与安装方式', 'Arm Structure & Mounting')}
       </h4>
 
       <div style={{ marginTop: 6 }}>
-        <span className="field-label-small">臂体结构</span>
-        <div className="desk-shape-presets" role="group" aria-label="支架臂体结构">
+        <span className="field-label-small">{t('臂体结构', 'Arm Configuration')}</span>
+        <div
+          className="desk-shape-presets"
+          role="group"
+          aria-label={t('支架臂体结构', 'Arm Configuration')}
+        >
           {(
             [
-              { value: 'single', label: '单支架臂' },
-              { value: 'dual', label: '双支架臂' },
+              { value: 'single', label: t('单支架臂', 'Single Arm') },
+              { value: 'dual', label: t('双支架臂', 'Dual Arm') },
             ] as const
           ).map((opt) => (
             <button
@@ -720,12 +793,16 @@ export function MonitorArmInspector({
       </div>
 
       <div style={{ marginTop: 12 }}>
-        <span className="field-label-small">安装方式</span>
-        <div className="desk-shape-presets" role="group" aria-label="支架臂安装方式">
+        <span className="field-label-small">{t('安装方式', 'Mount Orientation')}</span>
+        <div
+          className="desk-shape-presets"
+          role="group"
+          aria-label={t('支架臂安装方式', 'Mount Orientation')}
+        >
           {(
             [
-              { value: 'upright', label: '正装桌缘' },
-              { value: 'inverted', label: '倒挂悬吊' },
+              { value: 'upright', label: t('正装桌缘', 'Desk Clamp') },
+              { value: 'inverted', label: t('倒挂悬吊', 'Inverted Overhead') },
             ] as const
           ).map((opt) => (
             <button
@@ -744,7 +821,7 @@ export function MonitorArmInspector({
       {orientation === 'inverted' && (
         <div style={{ marginTop: 10 }}>
           <NumberField
-            label="倒挂横梁高度"
+            label={t('倒挂横梁高度', 'Overhead Rail Height')}
             value={cm(arm.invertedHeight ?? DEFAULT_INVERTED_HEIGHT)}
             min={45}
             max={85}
@@ -755,20 +832,22 @@ export function MonitorArmInspector({
       )}
 
       <div style={{ marginTop: 12 }}>
-        <span className="field-label-small">支架底座位置（支持 3D 视口直接拖拽移动）</span>
+        <span className="field-label-small">
+          {t('支架底座位置（支持 3D 视口直接拖拽移动）', 'Base Position (Draggable in 3D)')}
+        </span>
         {orientation === 'upright' && (
           <div
             className="desk-shape-presets"
             role="group"
-            aria-label="底座安装边沿"
+            aria-label={t('底座安装边沿', 'Clamp Edge')}
             style={{ marginBottom: 8 }}
           >
             {(
               [
-                { value: 'back', label: '后桌缘' },
-                { value: 'left', label: '左桌缘' },
-                { value: 'right', label: '右桌缘' },
-                { value: 'surface', label: '桌面自由' },
+                { value: 'back', label: t('后桌缘', 'Back Edge') },
+                { value: 'left', label: t('左桌缘', 'Left Edge') },
+                { value: 'right', label: t('右桌缘', 'Right Edge') },
+                { value: 'surface', label: t('桌面自由', 'Grommet') },
               ] as const
             ).map((opt) => (
               <button
@@ -794,12 +873,16 @@ export function MonitorArmInspector({
             ))}
           </div>
         )}
-        <div className="desk-shape-presets" role="group" aria-label="桌缘夹持方位">
+        <div
+          className="desk-shape-presets"
+          role="group"
+          aria-label={t('桌缘夹持方位', 'Clamp Side')}
+        >
           {(
             [
-              { value: 'left', label: '偏左' },
-              { value: 'center', label: '居中' },
-              { value: 'right', label: '偏右' },
+              { value: 'left', label: t('偏左', 'Left') },
+              { value: 'center', label: t('居中', 'Center') },
+              { value: 'right', label: t('偏右', 'Right') },
             ] as const
           ).map((opt) => (
             <button
@@ -827,7 +910,7 @@ export function MonitorArmInspector({
         </div>
         <div className="field-grid" style={{ marginTop: 8 }}>
           <NumberField
-            label="底座左右位置"
+            label={t('底座左右位置', 'Base X')}
             value={cm(armSys.clampX)}
             min={clampMinXCm}
             max={clampMaxXCm}
@@ -845,7 +928,7 @@ export function MonitorArmInspector({
           />
           {orientation === 'upright' && (
             <NumberField
-              label="底座前后位置"
+              label={t('底座前后位置', 'Base Z')}
               value={cm(armSys.clampZ)}
               min={clampMinZCm}
               max={clampMaxZCm}
@@ -864,22 +947,26 @@ export function MonitorArmInspector({
           )}
         </div>
         <p className="field-note">
-          固定机械参数：下长臂 {(ARM_LOWER_LENGTH * 100).toFixed(1)} cm · 气压上臂{' '}
-          {(ARM_UPPER_LENGTH * 100).toFixed(1)} cm · 单段仰角行程 ±{(ARM_MAX_DY * 100).toFixed(1)}{' '}
-          cm （可直接拖动底座移至后/左/右桌缘或桌面穿孔位置；拖动屏幕时底座锚定不漂移）。
+          {lang === 'en'
+            ? `Fixed links: lower ${(ARM_LOWER_LENGTH * 100).toFixed(1)} cm · gas-spring upper ${(ARM_UPPER_LENGTH * 100).toFixed(1)} cm · stroke ±${(ARM_MAX_DY * 100).toFixed(1)} cm.`
+            : `固定机械参数：下长臂 ${(ARM_LOWER_LENGTH * 100).toFixed(1)} cm · 气压上臂 ${(ARM_UPPER_LENGTH * 100).toFixed(1)} cm · 单段仰角行程 ±${(ARM_MAX_DY * 100).toFixed(1)} cm （可直接拖动底座移至后/左/右桌缘或桌面穿孔位置；拖动屏幕时底座锚定不漂移）。`}
         </p>
       </div>
 
       <div style={{ marginTop: 14 }}>
-        <span className="field-label-small">主臂挂载设备</span>
-        <div className="desk-shape-presets" role="group" aria-label="主臂挂载类型">
+        <span className="field-label-small">{t('主臂挂载设备', 'Primary Arm Target')}</span>
+        <div
+          className="desk-shape-presets"
+          role="group"
+          aria-label={t('主臂挂载类型', 'Primary Arm Target')}
+        >
           <button
             type="button"
             className={primaryKind === 'monitor' ? 'active' : ''}
             aria-pressed={primaryKind === 'monitor'}
             onClick={() => switchPrimaryKind('monitor')}
           >
-            显示器
+            {t('显示器', 'Monitor')}
           </button>
           <button
             type="button"
@@ -887,13 +974,13 @@ export function MonitorArmInspector({
             aria-pressed={primaryKind === 'laptopTray'}
             onClick={() => switchPrimaryKind('laptopTray')}
           >
-            NB 笔记本托盘
+            {t('笔记本托盘', 'Laptop Tray')}
           </button>
         </div>
 
         {primaryKind === 'monitor' ? (
           <select
-            aria-label="主臂挂载显示器"
+            aria-label={t('主臂挂载显示器', 'Primary Arm Monitor')}
             className="inspector-select"
             style={{ marginTop: 8 }}
             value={arm.monitorId ?? ''}
@@ -904,14 +991,14 @@ export function MonitorArmInspector({
               return (
                 <option key={m.id} value={m.id} disabled={occupied}>
                   {m.name}
-                  {occupied ? '（已被占用）' : ''}
+                  {occupied ? t('（已被占用）', ' (Occupied)') : ''}
                 </option>
               );
             })}
           </select>
         ) : (
           <select
-            aria-label="主臂托盘笔记本"
+            aria-label={t('主臂托盘笔记本', 'Primary Tray Laptop')}
             className="inspector-select"
             style={{ marginTop: 8 }}
             value={arm.primaryLaptopId ?? ''}
@@ -922,7 +1009,7 @@ export function MonitorArmInspector({
               return (
                 <option key={l.id} value={l.id} disabled={occupied}>
                   {l.name}
-                  {occupied ? '（已被占用）' : ''}
+                  {occupied ? t('（已被占用）', ' (Occupied)') : ''}
                 </option>
               );
             })}
@@ -932,15 +1019,19 @@ export function MonitorArmInspector({
 
       {armStyle === 'dual' && (
         <div style={{ marginTop: 14 }}>
-          <span className="field-label-small">副臂挂载设备</span>
-          <div className="desk-shape-presets" role="group" aria-label="副臂挂载类型">
+          <span className="field-label-small">{t('副臂挂载设备', 'Secondary Arm Target')}</span>
+          <div
+            className="desk-shape-presets"
+            role="group"
+            aria-label={t('副臂挂载类型', 'Secondary Arm Target')}
+          >
             <button
               type="button"
               className={secondaryKind === 'monitor' ? 'active' : ''}
               aria-pressed={secondaryKind === 'monitor'}
               onClick={() => switchSecondaryKind('monitor')}
             >
-              显示器
+              {t('显示器', 'Monitor')}
             </button>
             <button
               type="button"
@@ -948,7 +1039,7 @@ export function MonitorArmInspector({
               aria-pressed={secondaryKind === 'laptopTray'}
               onClick={() => switchSecondaryKind('laptopTray')}
             >
-              NB 笔记本托盘
+              {t('笔记本托盘', 'Laptop Tray')}
             </button>
             <button
               type="button"
@@ -956,13 +1047,13 @@ export function MonitorArmInspector({
               aria-pressed={secondaryKind === 'none'}
               onClick={() => switchSecondaryKind('none')}
             >
-              暂空
+              {t('暂空', 'Empty')}
             </button>
           </div>
 
           {secondaryKind === 'monitor' && (
             <select
-              aria-label="副臂挂载显示器"
+              aria-label={t('副臂挂载显示器', 'Secondary Arm Monitor')}
               className="inspector-select"
               style={{ marginTop: 8 }}
               value={arm.secondaryMonitorId ?? ''}
@@ -973,7 +1064,7 @@ export function MonitorArmInspector({
                 return (
                   <option key={m.id} value={m.id} disabled={occupied}>
                     {m.name}
-                    {occupied ? '（已被占用）' : ''}
+                    {occupied ? t('（已被占用）', ' (Occupied)') : ''}
                   </option>
                 );
               })}
@@ -982,7 +1073,7 @@ export function MonitorArmInspector({
 
           {secondaryKind === 'laptopTray' && (
             <select
-              aria-label="副臂托盘笔记本"
+              aria-label={t('副臂托盘笔记本', 'Secondary Tray Laptop')}
               className="inspector-select"
               style={{ marginTop: 8 }}
               value={arm.secondaryLaptopId ?? ''}
@@ -993,7 +1084,7 @@ export function MonitorArmInspector({
                 return (
                   <option key={l.id} value={l.id} disabled={occupied}>
                     {l.name}
-                    {occupied ? '（已被占用）' : ''}
+                    {occupied ? t('（已被占用）', ' (Occupied)') : ''}
                   </option>
                 );
               })}
@@ -1004,10 +1095,12 @@ export function MonitorArmInspector({
 
       {hasTray && (
         <div style={{ marginTop: 14 }}>
-          <span className="field-label-small">NB FP-2 笔记本托盘姿态</span>
+          <span className="field-label-small">
+            {t('VESA 笔记本托盘姿态', 'VESA Laptop Tray Pose')}
+          </span>
           <div className="field-grid">
             <NumberField
-              label="托盘悬停高度"
+              label={t('托盘悬停高度', 'Tray Elevation')}
               value={cm(arm.trayElevation ?? DEFAULT_TRAY_ELEVATION)}
               min={10}
               max={50}
@@ -1015,7 +1108,7 @@ export function MonitorArmInspector({
               onChange={(v) => update({ trayElevation: meters(v) })}
             />
             <NumberField
-              label="托盘前倾角度"
+              label={t('托盘前倾角度', 'Tray Tilt')}
               value={arm.trayTiltDeg ?? DEFAULT_TRAY_TILT_DEG}
               min={0}
               max={45}
@@ -1026,8 +1119,9 @@ export function MonitorArmInspector({
           </div>
           {clampSpanCm !== null && (
             <p className="field-note">
-              NB FP-2 冲压散热托盘（VESA 100×100），夹臂已自动扩展至 {clampSpanCm} cm（支持 22–42 cm
-              机宽与底部防滑托爪）。拖动笔记本可直接调整悬停桌面位置。
+              {lang === 'en'
+                ? `Ventilated VESA 100×100 laptop tray: side clamps expanded to ${clampSpanCm} cm (22–42 cm range). Drag the laptop directly to reposition.`
+                : `冲压散热托盘（VESA 100×100），夹臂已自动扩展至 ${clampSpanCm} cm（支持 22–42 cm 机宽与底部防滑托爪）。拖动笔记本可直接调整悬停桌面位置。`}
             </p>
           )}
         </div>
@@ -1036,16 +1130,19 @@ export function MonitorArmInspector({
       {armSys.branches.length > 0 && (
         <div style={{ marginTop: 14 }}>
           <span className="field-label-small">
-            双段机械臂活动度（支持 3D 水平 / 竖直手柄直接拖拽）
+            {t(
+              '双段机械臂活动度（支持 3D 水平 / 竖直手柄直接拖拽）',
+              'Arm Articulation (Draggable via 3D Gizmos)',
+            )}
           </span>
           {armSys.branches.map((branch) => {
             const isPrimary = branch.role === 'primary';
-            const prefix = isPrimary ? '主臂' : '副臂';
+            const prefix = isPrimary ? t('主臂', 'Primary') : t('副臂', 'Secondary');
             const field = isPrimary ? 'primaryElbowBend' : 'secondaryElbowBend';
-            const groupLabel = `${prefix}肘关节方位`;
-            const angleLabel = `${prefix}水平摆角`;
-            const lowerPitchLabel = `${prefix}下臂俯仰角`;
-            const upperPitchLabel = `${prefix}上臂俯仰角`;
+            const groupLabel = `${prefix}${t('肘关节方位', ' Elbow Bend')}`;
+            const angleLabel = `${prefix}${t('水平摆角', ' Swivel')}`;
+            const lowerPitchLabel = `${prefix}${t('下臂俯仰角', ' Lower Pitch')}`;
+            const upperPitchLabel = `${prefix}${t('上臂俯仰角', ' Upper Pitch')}`;
             const lowerRange = lowerPitchRange(armSys.isInverted);
             const commitBranchSolution = (
               solved: {
@@ -1109,25 +1206,26 @@ export function MonitorArmInspector({
                   }}
                 >
                   <span className="field-label-small" style={{ opacity: 0.82 }}>
-                    {prefix}：{branch.target.name}（折向{' '}
-                    {branch.elbowActiveSide === 'left' ? '左' : '右'}）
+                    {lang === 'en'
+                      ? `${prefix}: ${branch.target.name} (Elbow ${branch.elbowActiveSide === 'left' ? 'Left' : 'Right'})`
+                      : `${prefix}：${branch.target.name}（折向 ${branch.elbowActiveSide === 'left' ? '左' : '右'}）`}
                   </span>
                   <button
                     type="button"
                     className="inspector-mini-btn"
-                    title="恢复下长臂出厂默认仰角"
+                    title={t('恢复下长臂出厂默认仰角', 'Reset lower arm pitch')}
                     onClick={() => commitLowerPitch(defaultLowerPitchDeg(armSys.isInverted))}
                   >
                     <RotateCcw size={12} />
-                    归位下臂
+                    {t('归位下臂', 'Reset Lower')}
                   </button>
                 </div>
                 <div className="desk-shape-presets" role="group" aria-label={groupLabel}>
                   {(
                     [
-                      { key: 'auto', label: '自动', value: 'auto' },
-                      { key: 'left', label: '左折', value: 'left' },
-                      { key: 'right', label: '右折', value: 'right' },
+                      { key: 'auto', label: t('自动', 'Auto'), value: 'auto' },
+                      { key: 'left', label: t('左折', 'Bend Left'), value: 'left' },
+                      { key: 'right', label: t('右折', 'Bend Right'), value: 'right' },
                     ] as const
                   ).map((opt) => {
                     const active = branch.elbowBend === opt.value;
@@ -1186,8 +1284,9 @@ export function MonitorArmInspector({
                   />
                 </div>
                 <p className="field-note" style={{ marginTop: 4 }}>
-                  当前实时工作半径 {(branch.reachDistance * 100).toFixed(1)} cm（物理可达域{' '}
-                  {(branch.dMin * 100).toFixed(1)}–{(branch.dMax * 100).toFixed(1)} cm）
+                  {lang === 'en'
+                    ? `Current reach ${(branch.reachDistance * 100).toFixed(1)} cm (envelope ${(branch.dMin * 100).toFixed(1)}–${(branch.dMax * 100).toFixed(1)} cm)`
+                    : `当前实时工作半径 ${(branch.reachDistance * 100).toFixed(1)} cm（物理可达域 ${(branch.dMin * 100).toFixed(1)}–${(branch.dMax * 100).toFixed(1)} cm）`}
                   {branch.clamped && branch.limitReason
                     ? ` · ${armLimitMessage(branch.limitReason)}`
                     : ''}
@@ -1196,24 +1295,29 @@ export function MonitorArmInspector({
             );
           })}
           <p className="field-note">
-            下长臂（27.5 cm）与气压上臂（30.5 cm）均支持独立上下俯仰与水平旋转；两段臂长刚性不可变，
-            下压或伸展时自动避让桌面、横梁、墙面与桌面物品（如音箱）。
+            {t(
+              '下长臂（27.5 cm）与气压上臂（30.5 cm）均支持独立上下俯仰与水平旋转；两段臂长刚性不可变，下压或伸展时自动避让桌面、横梁、墙面与桌面物品。',
+              'Both rigid arm links (27.5 cm lower + 30.5 cm gas-spring upper) articulate independently while avoiding desktop obstacles.',
+            )}
           </p>
         </div>
       )}
 
       <label className="lamp-switch" style={{ marginTop: 14 }}>
-        <span>开启臂身理线槽</span>
+        <span>{t('开启臂身理线槽', 'Route Cables via Arm Channels')}</span>
         <input
           type="checkbox"
           role="switch"
-          aria-label="开启臂身理线槽"
+          aria-label={t('开启臂身理线槽', 'Route Cables via Arm Channels')}
           checked={arm.cableClip}
           onChange={(e) => update({ cableClip: e.target.checked })}
         />
       </label>
       <p className="field-note">
-        支持单/双支架臂、正装桌缘与倒挂龙门横梁；已挂载显示器自动隐藏原装底座并沿双长臂理线槽走线。
+        {t(
+          '支持单/双支架臂、正装桌缘与倒挂龙门横梁；已挂载显示器自动隐藏原装底座并沿双长臂理线槽走线。',
+          'Mounted monitors hide their stock stand automatically and route cables cleanly along the arm channels.',
+        )}
       </p>
     </section>
   );
@@ -1228,6 +1332,8 @@ function CableWaypointList({
   fallbackPoints: CableWaypoint[];
   onSafe: (fn: () => void) => void;
 }) {
+  const { lang } = useI18n();
+  const t = (zh: string, en: string) => (lang === 'en' ? en : zh);
   const {
     selectedCableId,
     selectedWaypointIdx,
@@ -1260,16 +1366,20 @@ function CableWaypointList({
             selectCable(next ? cable.id : null);
           }}
         >
-          {isOpen ? '收起节点微调' : `节点微调（${activePoints.length} 点）`}
+          {isOpen
+            ? t('收起节点微调', 'Hide Waypoints')
+            : lang === 'en'
+              ? `Waypoints (${activePoints.length})`
+              : `节点微调（${activePoints.length} 点）`}
         </button>
         {isCustom && (
           <button
             type="button"
             style={{ fontSize: 11, padding: '3px 7px' }}
             onClick={() => onSafe(() => resetCableWaypoints(cable.id))}
-            title="还原为自动避障与穿孔走线"
+            title={t('还原为自动避障与穿孔走线', 'Reset to automatic routing')}
           >
-            <RotateCcw size={11} /> 还原自动走线
+            <RotateCcw size={11} /> {t('还原自动走线', 'Auto Route')}
           </button>
         )}
       </div>
@@ -1277,7 +1387,10 @@ function CableWaypointList({
       {isOpen && (
         <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
           <small style={{ color: '#64748b' }}>
-            可在三维场景中直接拖动蓝色节点（按住 Shift 或拖动上方橙色箭头可调上下高度）。
+            {t(
+              '可在三维场景中直接拖动蓝色节点（按住 Shift 或拖动上方橙色箭头可调上下高度）。',
+              'Drag blue waypoint spheres in 3D (hold Shift or drag orange arrow for vertical Y).',
+            )}
           </small>
           {activePoints.map((pt, idx) => {
             const activeNode = selectedCableId === cable.id && selectedWaypointIdx === idx;
@@ -1312,13 +1425,17 @@ function CableWaypointList({
                     }}
                     onClick={() => selectCable(cable.id, idx)}
                   >
-                    控制点 #{idx + 1}
+                    {t(`控制点 #${idx + 1}`, `Node #${idx + 1}`)}
                   </button>
                   <div style={{ display: 'flex', gap: 4 }}>
                     <button
                       type="button"
                       style={{ fontSize: 11, padding: '1px 5px' }}
-                      aria-label={`在控制点 ${idx + 1} 后插入节点`}
+                      aria-label={
+                        lang === 'en'
+                          ? `Insert node after ${idx + 1}`
+                          : `在控制点 ${idx + 1} 后插入节点`
+                      }
                       onClick={() => {
                         const next = activePoints[Math.min(activePoints.length - 1, idx + 1)];
                         onSafe(() =>
@@ -1335,19 +1452,21 @@ function CableWaypointList({
                         );
                       }}
                     >
-                      + 插点
+                      {t('+ 插点', '+ Add')}
                     </button>
                     {activePoints.length > 1 && (
                       <button
                         type="button"
                         className="danger-text"
                         style={{ fontSize: 11, padding: '1px 5px' }}
-                        aria-label={`删除控制点 ${idx + 1}`}
+                        aria-label={
+                          lang === 'en' ? `Delete node ${idx + 1}` : `删除控制点 ${idx + 1}`
+                        }
                         onClick={() =>
                           onSafe(() => removeCableWaypoint(cable.id, idx, fallbackPoints))
                         }
                       >
-                        删除
+                        {t('删除', 'Delete')}
                       </button>
                     )}
                   </div>
@@ -1367,7 +1486,7 @@ function CableWaypointList({
                     }
                   />
                   <NumberField
-                    label="高Y"
+                    label={t('高Y', 'Y')}
                     value={cm(pt.y)}
                     min={1}
                     max={220}
@@ -1403,6 +1522,8 @@ function CableWaypointList({
 }
 
 export function SelectedCableInspectorSection({ onSafe }: { onSafe: (fn: () => void) => void }) {
+  const { lang } = useI18n();
+  const t = (zh: string, en: string) => (lang === 'en' ? en : zh);
   const { project, selectedCableId, updateCable, removeCable, selectCable } = useEditor();
   if (!selectedCableId) return null;
   const cable = (project.cables ?? []).find((c) => c.id === selectedCableId);
@@ -1426,24 +1547,24 @@ export function SelectedCableInspectorSection({ onSafe }: { onSafe: (fn: () => v
     <section className="property-section">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h4>
-          <CableIcon size={15} /> 已选线缆微调
+          <CableIcon size={15} /> {t('已选线缆微调', 'Selected Cable')}
         </h4>
         <button
           type="button"
           className="icon-button danger-text"
-          aria-label="拔除所选线缆"
+          aria-label={t('拔除所选线缆', 'Remove Selected Cable')}
           onClick={() => onSafe(() => removeCable(cable.id))}
         >
           <Trash2 size={13} />
         </button>
       </div>
       <p className="field-note" style={{ marginTop: 0 }}>
-        {spec.label} · {fromItem?.name ?? '设备'} → {toItem?.name ?? '桌下走线'}
+        {spec.label} · {fromItem?.name ?? t('设备', 'Device')} →{' '}
+        {toItem?.name ?? t('桌下走线', 'Under Desk')}
         {resolved
-          ? ` · 固定 ${cableEffectiveLengths(cable).totalM.toFixed(2)} m / 实走 ${resolved.pathLengthM.toFixed(2)} m`
-          : ''}
-        {resolved?.passedHoles.length
-          ? ` · 已过孔：${resolved.passedHoles.map((h) => h.label).join(' / ')}`
+          ? lang === 'en'
+            ? ` · Fixed ${cableEffectiveLengths(cable).totalM.toFixed(2)} m / Path ${resolved.pathLengthM.toFixed(2)} m`
+            : ` · 固定 ${cableEffectiveLengths(cable).totalM.toFixed(2)} m / 实走 ${resolved.pathLengthM.toFixed(2)} m`
           : ''}
       </p>
       <div className="cable-row-controls" style={{ marginTop: 6 }}>
@@ -1456,11 +1577,11 @@ export function SelectedCableInspectorSection({ onSafe }: { onSafe: (fn: () => v
                 onSafe(() => updateCable(cable.id, { viaStandSlot: e.target.checked }))
               }
             />
-            <span>穿显示器底座走线孔</span>
+            <span>{t('穿显示器底座走线孔', 'Pass Through Stand Cutout')}</span>
           </label>
         )}
         <select
-          aria-label="过桌底与走线孔偏好"
+          aria-label={t('过桌底与走线孔偏好', 'Desk Drop Routing')}
           value={cable.drop ?? (cable.to.type === 'floor' ? cable.to.drop : 'auto')}
           onChange={(e) => {
             const drop = e.target.value as 'auto' | 'grommet' | 'backEdge';
@@ -1472,9 +1593,9 @@ export function SelectedCableInspectorSection({ onSafe }: { onSafe: (fn: () => v
             );
           }}
         >
-          <option value="auto">自动（优先穿桌面走线孔）</option>
-          <option value="grommet">强制穿桌面走线孔</option>
-          <option value="backEdge">绕桌后缘下垂</option>
+          <option value="auto">{t('自动（优先穿桌面走线孔）', 'Auto (Prefer Grommet)')}</option>
+          <option value="grommet">{t('强制穿桌面走线孔', 'Via Desk Grommet')}</option>
+          <option value="backEdge">{t('绕桌后缘下垂', 'Over Back Edge')}</option>
         </select>
       </div>
       {resolved && (
@@ -1485,7 +1606,7 @@ export function SelectedCableInspectorSection({ onSafe }: { onSafe: (fn: () => v
         style={{ marginTop: 8, width: '100%' }}
         onClick={() => selectCable(null)}
       >
-        完成线缆微调
+        {t('完成线缆微调', 'Done Editing Cable')}
       </button>
     </section>
   );
@@ -1498,6 +1619,8 @@ export function CableConnectionsSection({
   item: SceneItem;
   onSafe: (fn: () => void) => void;
 }) {
+  const { lang } = useI18n();
+  const t = (zh: string, en: string) => (lang === 'en' ? en : zh);
   const { project, addCable, updateCable, removeCable, wiringMode, setWiringMode } = useEditor();
   const [customFromPortId, setCustomFromPortId] = useState<string>('');
   const [customTargetKey, setCustomTargetKey] = useState<string>('floor:auto');
@@ -1694,7 +1817,7 @@ export function CableConnectionsSection({
   return (
     <section className="property-section">
       <h4>
-        <CableIcon size={15} /> 端口与模拟走线
+        <CableIcon size={15} /> {t('端口与模拟走线', 'Ports & Cable Routing')}
       </h4>
       <div className="cable-quick-add">
         {Array.from(new Set(ports.map((p) => p.kind)))
@@ -1704,12 +1827,14 @@ export function CableConnectionsSection({
               key={kind}
               type="button"
               onClick={() => quickConnect(kind)}
-              aria-label={`插入 ${cableMeta[kind].label}`}
+              aria-label={`${t('插入', 'Plug')} ${cableMeta[kind].label}`}
             >
               <Plus size={12} />
               {item.kind === 'powerStrip' && kind === 'power'
-                ? '插排接入供电'
-                : `插 ${cableMeta[kind].shortLabel}`}
+                ? t('插排接入供电', 'Plug Strip Power')
+                : lang === 'en'
+                  ? `Plug ${cableMeta[kind].shortLabel}`
+                  : `插 ${cableMeta[kind].shortLabel}`}
             </button>
           ))}
         <button
@@ -1718,7 +1843,9 @@ export function CableConnectionsSection({
           aria-pressed={wiringMode}
           onClick={() => setWiringMode(!wiringMode)}
         >
-          {wiringMode ? '退出 3D 连线' : '3D 点选端口连线'}
+          {wiringMode
+            ? t('退出 3D 连线', 'Exit 3D Wiring')
+            : t('3D 点选端口连线', '3D Port Wiring')}
         </button>
       </div>
 
@@ -1735,10 +1862,12 @@ export function CableConnectionsSection({
             gap: 6,
           }}
         >
-          <small style={{ fontWeight: 600, color: '#334155' }}>自选两端直连</small>
+          <small style={{ fontWeight: 600, color: '#334155' }}>
+            {t('自选两端直连', 'Direct Port-to-Port')}
+          </small>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             <select
-              aria-label="起点端口"
+              aria-label={t('起点端口', 'Source Port')}
               value={effectiveFromPort.id}
               onChange={(e) => setCustomFromPortId(e.target.value)}
               style={{ flex: 1, minWidth: 96 }}
@@ -1750,14 +1879,16 @@ export function CableConnectionsSection({
               ))}
             </select>
             <select
-              aria-label="目标端口"
+              aria-label={t('目标端口', 'Target Port')}
               value={customTargetKey}
               onChange={(e) => setCustomTargetKey(e.target.value)}
               style={{ flex: 1, minWidth: 118 }}
             >
-              <option value="floor:auto">穿孔落桌下（自动）</option>
-              <option value="floor:grommet">强制穿桌面走线孔</option>
-              <option value="floor:backEdge">绕桌后缘下垂</option>
+              <option value="floor:auto">
+                {t('穿孔落桌下（自动）', 'Drop Under Desk (Auto)')}
+              </option>
+              <option value="floor:grommet">{t('强制穿桌面走线孔', 'Via Desk Grommet')}</option>
+              <option value="floor:backEdge">{t('绕桌后缘下垂', 'Over Back Edge')}</option>
               {otherDevices.flatMap((dev) =>
                 devicePorts(dev)
                   .filter(
@@ -1785,8 +1916,12 @@ export function CableConnectionsSection({
                   )),
               )}
             </select>
-            <button type="button" onClick={connectCustomPair} aria-label="建立自定义连线">
-              连接
+            <button
+              type="button"
+              onClick={connectCustomPair}
+              aria-label={t('建立自定义连线', 'Connect Ports')}
+            >
+              {t('连接', 'Connect')}
             </button>
           </div>
         </div>
@@ -1805,7 +1940,7 @@ export function CableConnectionsSection({
                 ? (devicePorts(project.items.find((i) => i.id === fromEp.itemId) ?? item).find(
                     (p) => p.id === fromEp.portId,
                   )?.label ?? fromEp.portId)
-                : '桌下';
+                : t('桌下', 'Under Desk');
             const toDevice =
               toEp.type === 'device' ? project.items.find((i) => i.id === toEp.itemId) : undefined;
 
@@ -1813,13 +1948,15 @@ export function CableConnectionsSection({
               <div key={cable.id} className="cable-row">
                 <div className="cable-row-top">
                   <strong>
-                    {cable.kind === 'dp' ? formatCableDisplayName(cable) : spec.label} · Ø
-                    {(spec.radius * 2000).toFixed(1)}mm
+                    {cable.kind === 'dp' || cable.kind === 'usbc'
+                      ? formatCableDisplayName(cable)
+                      : spec.label}{' '}
+                    · Ø{(spec.radius * 2000).toFixed(1)}mm
                   </strong>
                   <button
                     type="button"
                     className="icon-button danger-text"
-                    aria-label={`拔除 ${spec.label}`}
+                    aria-label={`${t('拔除', 'Unplug')} ${spec.label}`}
                     onClick={() => onSafe(() => removeCable(cable.id))}
                   >
                     <Trash2 size={13} />
@@ -1830,14 +1967,18 @@ export function CableConnectionsSection({
                   {toDevice
                     ? toDevice.name
                     : cable.to.type === 'floor' && cable.to.drop === 'backEdge'
-                      ? '桌后缘垂落'
+                      ? t('桌后缘垂落', 'Over Back Edge')
                       : project.desk.grommet?.enabled
-                        ? '经桌面走线孔垂落'
-                        : '桌后缘垂落'}
+                        ? t('经桌面走线孔垂落', 'Via Desk Grommet')
+                        : t('桌后缘垂落', 'Over Back Edge')}
                 </small>
 
                 <div className="cable-length-block">
-                  <div className="cable-length-presets" role="group" aria-label="线缆长度预设">
+                  <div
+                    className="cable-length-presets"
+                    role="group"
+                    aria-label={t('线缆长度预设', 'Cable Length Presets')}
+                  >
                     {spec.presetLengthsM.map((len) => {
                       const active = Math.abs(lengths.nominalM - len) < 1e-4;
                       return (
@@ -1854,15 +1995,20 @@ export function CableConnectionsSection({
                             )
                           }
                         >
-                          {cable.kind === 'magsafe' ? `官方 ${len}m` : `${len}m`}
+                          {cable.kind === 'magsafe'
+                            ? t(`定长 ${len}m`, `Fixed ${len}m`)
+                            : `${len}m`}
                         </button>
                       );
                     })}
                     {cable.kind !== 'magsafe' && (
-                      <label className="cable-custom-len" title="自定义长度（米）">
+                      <label
+                        className="cable-custom-len"
+                        title={t('自定义长度（米）', 'Custom length (m)')}
+                      >
                         <input
                           type="number"
-                          aria-label={`${spec.label} 自定义长度`}
+                          aria-label={`${spec.label} ${t('自定义长度', 'Custom Length')}`}
                           min={0.3}
                           max={10}
                           step={0.1}
@@ -1881,7 +2027,7 @@ export function CableConnectionsSection({
 
                   <div className="cable-length-meta">
                     <select
-                      aria-label="线长统计口径"
+                      aria-label={t('线长统计口径', 'Length Basis')}
                       value={lengths.includesConnectors ? 'with' : 'body'}
                       disabled={cable.kind === 'magsafe'}
                       onChange={(e) =>
@@ -1892,14 +2038,28 @@ export function CableConnectionsSection({
                         )
                       }
                     >
-                      <option value="with">含端子 {lengths.nominalM} m</option>
-                      <option value="body">不含端子 {lengths.nominalM} m</option>
+                      <option value="with">
+                        {t(`含端子 ${lengths.nominalM} m`, `Incl. plugs ${lengths.nominalM} m`)}
+                      </option>
+                      <option value="body">
+                        {t(`不含端子 ${lengths.nominalM} m`, `Jacket only ${lengths.nominalM} m`)}
+                      </option>
                     </select>
                     <span>
                       {lengths.includesConnectors
-                        ? `线身 ${lengths.bodyM.toFixed(2)} m`
-                        : `含端子 ${lengths.totalM.toFixed(2)} m`}
-                      {resolved ? ` · 需 ${resolved.pathLengthM.toFixed(2)} m` : ''}
+                        ? t(
+                            `线身 ${lengths.bodyM.toFixed(2)} m`,
+                            `Body ${lengths.bodyM.toFixed(2)} m`,
+                          )
+                        : t(
+                            `含端子 ${lengths.totalM.toFixed(2)} m`,
+                            `Total ${lengths.totalM.toFixed(2)} m`,
+                          )}
+                      {resolved
+                        ? lang === 'en'
+                          ? ` · Path ${resolved.pathLengthM.toFixed(2)} m`
+                          : ` · 需 ${resolved.pathLengthM.toFixed(2)} m`
+                        : ''}
                     </span>
                   </div>
                   {spec.officialLengthNote && (
@@ -1907,7 +2067,9 @@ export function CableConnectionsSection({
                   )}
                   {resolved && resolved.shortfallM > 0.02 && (
                     <small className="danger-text">
-                      当前路径长度不足（还差 {resolved.shortfallM.toFixed(2)} m）
+                      {lang === 'en'
+                        ? `Short by ${resolved.shortfallM.toFixed(2)} m`
+                        : `当前路径长度不足（还差 ${resolved.shortfallM.toFixed(2)} m）`}
                     </small>
                   )}
                 </div>
@@ -1915,7 +2077,7 @@ export function CableConnectionsSection({
                 <div className="cable-row-controls">
                   {cable.from.type === 'device' && cable.from.itemId === item.id && (
                     <select
-                      aria-label="线缆终点目标"
+                      aria-label={t('线缆终点目标', 'Cable Destination')}
                       value={
                         cable.to.type === 'floor'
                           ? `floor:${cable.to.drop}`
@@ -1936,9 +2098,13 @@ export function CableConnectionsSection({
                         }
                       }}
                     >
-                      <option value="floor:auto">桌下垂落（自动走线孔）</option>
-                      <option value="floor:grommet">穿桌面走线孔垂落</option>
-                      <option value="floor:backEdge">绕桌后缘垂落</option>
+                      <option value="floor:auto">
+                        {t('桌下垂落（自动走线孔）', 'Drop Under Desk (Auto)')}
+                      </option>
+                      <option value="floor:grommet">
+                        {t('穿桌面走线孔垂落', 'Via Desk Grommet')}
+                      </option>
+                      <option value="floor:backEdge">{t('绕桌后缘垂落', 'Over Back Edge')}</option>
                       {otherDevices.flatMap((dev) =>
                         devicePorts(dev)
                           .filter(
@@ -1970,7 +2136,7 @@ export function CableConnectionsSection({
                       const editFrom = isOutletSocket ? fromSelf : !fromSelf;
                       return (
                         <select
-                          aria-label="插头规格"
+                          aria-label={t('插头规格', 'Plug Type')}
                           value={(editFrom ? cable.fromPlugType : cable.toPlugType) ?? ''}
                           onChange={(e) => {
                             const plug = (e.target.value || undefined) as PlugSpecKind | undefined;
@@ -1982,7 +2148,9 @@ export function CableConnectionsSection({
                             );
                           }}
                         >
-                          <option value="">不附带插头（默认纯线端）</option>
+                          <option value="">
+                            {t('不附带插头（默认纯线端）', 'No Plug (Bare Connector)')}
+                          </option>
                           {plugSpecValues.map((p) => (
                             <option key={p} value={p}>
                               {PLUG_SPEC_META[p].label}
@@ -1999,7 +2167,7 @@ export function CableConnectionsSection({
                         onSafe(() => updateCable(cable.id, { routeViaArm: e.target.checked }))
                       }
                     />
-                    <span>走支架臂理线</span>
+                    <span>{t('走支架臂理线', 'Route via Arm')}</span>
                   </label>
                   {(item.kind === 'monitor' || toDevice?.kind === 'monitor') &&
                     !cable.routeViaArm && (
@@ -2011,11 +2179,11 @@ export function CableConnectionsSection({
                             onSafe(() => updateCable(cable.id, { viaStandSlot: e.target.checked }))
                           }
                         />
-                        <span>穿显示器底座走线孔</span>
+                        <span>{t('穿显示器底座走线孔', 'Via Stand Cutout')}</span>
                       </label>
                     )}
                   <select
-                    aria-label="过桌底与走线孔偏好"
+                    aria-label={t('过桌底与走线孔偏好', 'Desk Drop Preference')}
                     value={cable.drop ?? (cable.to.type === 'floor' ? cable.to.drop : 'auto')}
                     onChange={(e) => {
                       const drop = e.target.value as 'auto' | 'grommet' | 'backEdge';
@@ -2027,20 +2195,22 @@ export function CableConnectionsSection({
                       );
                     }}
                   >
-                    <option value="auto">自动（优先穿走线孔）</option>
-                    <option value="grommet">穿桌面走线孔</option>
-                    <option value="backEdge">绕桌后缘</option>
+                    <option value="auto">
+                      {t('自动（优先穿走线孔）', 'Auto (Prefer Grommet)')}
+                    </option>
+                    <option value="grommet">{t('穿桌面走线孔', 'Via Grommet')}</option>
+                    <option value="backEdge">{t('绕桌后缘', 'Over Back Edge')}</option>
                   </select>
                 </div>
                 {resolved && resolved.passedHoles.length > 0 && (
                   <small className="cable-official-note" style={{ display: 'block', marginTop: 4 }}>
-                    已穿孔：{resolved.passedHoles.map((h) => h.label).join(' · ')}
-                    {resolved.collisionAdjusted ? ' · 已避让遮挡物' : ''}
+                    {t('已穿孔', 'Routed through slots')}
+                    {resolved.collisionAdjusted ? t(' · 已避让遮挡物', ' · Obstacle avoided') : ''}
                   </small>
                 )}
                 {resolved && resolved.passedHoles.length === 0 && resolved.collisionAdjusted && (
                   <small className="cable-official-note" style={{ display: 'block', marginTop: 4 }}>
-                    已自动防穿模绕行实体
+                    {t('已自动防穿模绕行实体', 'Routed around desktop obstacles')}
                   </small>
                 )}
                 {resolved && (
@@ -2060,8 +2230,10 @@ export function CableConnectionsSection({
         </div>
       ) : (
         <p className="field-note">
-          点击上方按钮为当前设备模拟插线；标注“含端子 /
-          不含端子”长度并实时核算桌面与支架臂路径长度。
+          {t(
+            '点击上方按钮为当前设备模拟插线；标注“含端子 / 不含端子”长度并实时核算桌面与支架臂路径长度。',
+            'Click above to plug cables into this device with real fixed-length path validation.',
+          )}
         </p>
       )}
     </section>
@@ -2069,10 +2241,10 @@ export function CableConnectionsSection({
 }
 
 const AVIATOR_COLORS = [
-  { hex: '#2a313d', label: '碳黑编织' },
-  { hex: '#d8dde6', label: '冰川银白' },
-  { hex: '#1e3a8a', label: '深海藏青' },
-  { hex: '#6d28d9', label: '暗夜紫' },
+  { hex: '#2a313d', zh: '碳黑编织', en: 'Carbon Black' },
+  { hex: '#d8dde6', zh: '冰川银白', en: 'Glacier Silver' },
+  { hex: '#1e3a8a', zh: '深海藏青', en: 'Navy Blue' },
+  { hex: '#6d28d9', zh: '暗夜紫', en: 'Midnight Violet' },
 ];
 
 const RGB_SWATCHES = ['#ffffff', '#7dd3fc', '#22d3ee', '#a78bfa', '#fb7185', '#34d399', '#fbbf24'];
@@ -2084,6 +2256,8 @@ export function KeyboardInspectorSection({
   item: SceneItem;
   onSafe: (fn: () => void) => void;
 }) {
+  const { lang } = useI18n();
+  const t = (zh: string, en: string) => (lang === 'en' ? en : zh);
   const updateItem = useEditor((s) => s.updateItem);
   if (item.kind !== 'keyboard') return null;
 
@@ -2114,28 +2288,34 @@ export function KeyboardInspectorSection({
     <>
       <section className="property-section">
         <h4>
-          <Keyboard size={15} /> 键盘配列与外观
+          <Keyboard size={15} /> {t('键盘配列与外观', 'Layout & Appearance')}
         </h4>
         <div
           className="desk-shape-presets"
           role="group"
-          aria-label="外观配色"
+          aria-label={t('外观配色', 'Chassis Theme')}
           style={{ marginBottom: 10 }}
         >
-          {keyboardThemes.map((t: KeyboardTheme) => (
+          {keyboardThemes.map((th: KeyboardTheme) => (
             <button
-              key={t}
+              key={th}
               type="button"
-              className={currentTheme === t ? 'active' : ''}
-              aria-pressed={currentTheme === t}
-              onClick={() => updateKb({ theme: t }, undefined, KEYBOARD_THEME_SPECS[t].chassisHex)}
+              className={currentTheme === th ? 'active' : ''}
+              aria-pressed={currentTheme === th}
+              onClick={() =>
+                updateKb({ theme: th }, undefined, KEYBOARD_THEME_SPECS[th].chassisHex)
+              }
             >
-              {KEYBOARD_THEME_SPECS[t].label}
+              {KEYBOARD_THEME_SPECS[th].label}
             </button>
           ))}
         </div>
 
-        <div className="monitor-presets wrap-presets" role="group" aria-label="键盘配列">
+        <div
+          className="monitor-presets wrap-presets"
+          role="group"
+          aria-label={t('键盘配列', 'Keyboard Layout')}
+        >
           {keyboardLayouts.map((id) => (
             <button
               key={id}
@@ -2149,13 +2329,14 @@ export function KeyboardInspectorSection({
           ))}
         </div>
         <p className="field-note">
-          当前 {spec.label} · {cm(item.size.width)} × {cm(item.size.depth)} cm
+          {t('当前 ', '')}
+          {spec.label} · {cm(item.size.width)} × {cm(item.size.depth)} cm
         </p>
 
         <div
           className="desk-shape-presets"
           role="group"
-          aria-label="轴体方案"
+          aria-label={t('轴体方案', 'Switch Type')}
           style={{ marginTop: 12 }}
         >
           <button
@@ -2164,7 +2345,7 @@ export function KeyboardInspectorSection({
             aria-pressed={current.switchType === 'mechanical'}
             onClick={() => updateKb({ switchType: 'mechanical' })}
           >
-            机械轴键盘
+            {t('机械轴键盘', 'Mechanical')}
           </button>
           <button
             type="button"
@@ -2172,60 +2353,67 @@ export function KeyboardInspectorSection({
             aria-pressed={current.switchType === 'magnetic'}
             onClick={() => updateKb({ switchType: 'magnetic', aviatorCable: true })}
           >
-            磁轴键盘
+            {t('磁轴键盘', 'Magnetic Hall')}
           </button>
         </div>
 
         <label className="lamp-switch" style={{ marginTop: 14 }}>
-          <span>GX16 弹簧航空线</span>
+          <span>{t('GX16 弹簧航空线', 'GX16 Coiled Aviator Cable')}</span>
           <input
             type="checkbox"
             role="switch"
-            aria-label="GX16 弹簧航空线"
+            aria-label={t('GX16 弹簧航空线', 'GX16 Coiled Aviator Cable')}
             checked={current.aviatorCable}
             onChange={(e) => updateKb({ aviatorCable: e.target.checked })}
           />
         </label>
         {current.aviatorCable && (
           <div className="swatches" style={{ marginTop: 6 }}>
-            {AVIATOR_COLORS.map((c) => (
-              <button
-                key={c.hex}
-                type="button"
-                title={c.label}
-                aria-label={`航空线配色 ${c.label}`}
-                aria-pressed={current.cableColor.toLowerCase() === c.hex.toLowerCase()}
-                style={{ backgroundColor: c.hex }}
-                onClick={() => updateKb({ cableColor: c.hex })}
-              />
-            ))}
+            {AVIATOR_COLORS.map((c) => {
+              const label = lang === 'en' ? c.en : c.zh;
+              return (
+                <button
+                  key={c.hex}
+                  type="button"
+                  title={label}
+                  aria-label={`${t('航空线配色', 'Coiled cable color')} ${label}`}
+                  aria-pressed={current.cableColor.toLowerCase() === c.hex.toLowerCase()}
+                  style={{ backgroundColor: c.hex }}
+                  onClick={() => updateKb({ cableColor: c.hex })}
+                />
+              );
+            })}
           </div>
         )}
       </section>
 
       <section className="property-section">
         <h4>
-          <Sparkles size={15} /> RGB 背光灯效
+          <Sparkles size={15} /> {t('RGB 背光灯效', 'RGB Backlight')}
         </h4>
         <label className="lamp-switch">
-          <span>开启 RGB 背光</span>
+          <span>{t('开启 RGB 背光', 'Enable RGB Backlight')}</span>
           <input
             type="checkbox"
             role="switch"
-            aria-label="开启 RGB 背光"
+            aria-label={t('开启 RGB 背光', 'Enable RGB Backlight')}
             checked={current.rgb}
             onChange={(e) => updateKb({ rgb: e.target.checked })}
           />
         </label>
         {current.rgb && (
           <>
-            <div className="desk-shape-presets wrap-presets" role="group" aria-label="RGB 灯效模式">
+            <div
+              className="desk-shape-presets wrap-presets"
+              role="group"
+              aria-label={t('RGB 灯效模式', 'RGB Mode')}
+            >
               {(
                 [
-                  { value: 'rainbow', label: '彩虹流光' },
-                  { value: 'aurora', label: '极光渐变' },
-                  { value: 'static', label: '单色常亮' },
-                  { value: 'breathing', label: '呼吸微光' },
+                  { value: 'rainbow', label: t('彩虹流光', 'Rainbow') },
+                  { value: 'aurora', label: t('极光渐变', 'Aurora') },
+                  { value: 'static', label: t('单色常亮', 'Static') },
+                  { value: 'breathing', label: t('呼吸微光', 'Breathing') },
                 ] as const
               ).map((m) => (
                 <button
@@ -2241,12 +2429,12 @@ export function KeyboardInspectorSection({
             </div>
             <label className="field" style={{ marginTop: 10 }}>
               <span style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>背光亮度</span>
+                <span>{t('背光亮度', 'Brightness')}</span>
                 <span>{Math.round(currentBrightness * 100)}%</span>
               </span>
               <input
                 type="range"
-                aria-label="背光亮度"
+                aria-label={t('背光亮度', 'Brightness')}
                 min={0.2}
                 max={1.5}
                 step={0.05}
@@ -2260,7 +2448,7 @@ export function KeyboardInspectorSection({
                   <button
                     key={hex}
                     type="button"
-                    aria-label={`RGB 颜色 ${hex}`}
+                    aria-label={`${t('RGB 颜色', 'RGB Color')} ${hex}`}
                     aria-pressed={current.rgbColor.toLowerCase() === hex.toLowerCase()}
                     style={{ backgroundColor: hex }}
                     onClick={() => updateKb({ rgbColor: hex })}
@@ -2282,6 +2470,8 @@ export function MouseInspectorSection({
   item: SceneItem;
   onSafe: (fn: () => void) => void;
 }) {
+  const { lang } = useI18n();
+  const t = (zh: string, en: string) => (lang === 'en' ? en : zh);
   const updateItem = useEditor((s) => s.updateItem);
   if (item.kind !== 'mouse') return null;
 
@@ -2301,9 +2491,13 @@ export function MouseInspectorSection({
   return (
     <section className="property-section">
       <h4>
-        <Mouse size={15} /> 鼠标款式与连接方式
+        <Mouse size={15} /> {t('鼠标款式与连接方式', 'Mouse Variant & Connection')}
       </h4>
-      <div className="desk-shape-presets" role="group" aria-label="鼠标具体型号">
+      <div
+        className="desk-shape-presets"
+        role="group"
+        aria-label={t('鼠标具体型号', 'Mouse Variant')}
+      >
         {MOUSE_PRESETS.map((p) => (
           <button
             key={p.id}
@@ -2331,6 +2525,8 @@ export function MousepadSizeFields({
   item: SceneItem;
   onSafe: (fn: () => void) => void;
 }) {
+  const { lang } = useI18n();
+  const t = (zh: string, en: string) => (lang === 'en' ? en : zh);
   const updateItem = useEditor((s) => s.updateItem);
   if (item.kind !== 'mousepad') return null;
 
@@ -2343,7 +2539,11 @@ export function MousepadSizeFields({
 
   return (
     <>
-      <div className="monitor-presets wrap-presets" role="group" aria-label="鼠标垫尺寸预设">
+      <div
+        className="monitor-presets wrap-presets"
+        role="group"
+        aria-label={t('鼠标垫尺寸预设', 'Desk Mat Size Presets')}
+      >
         {MOUSEPAD_SIZE_PRESETS.map((p) => (
           <button
             key={p.id}
@@ -2359,7 +2559,7 @@ export function MousepadSizeFields({
 
       <div className="field-grid" style={{ marginTop: 10 }}>
         <NumberField
-          label="宽度"
+          label={t('宽度', 'Width')}
           value={cm(item.size.width)}
           min={cm(MOUSEPAD_MIN_WIDTH)}
           max={cm(MOUSEPAD_MAX_WIDTH)}
@@ -2367,7 +2567,7 @@ export function MousepadSizeFields({
           onChange={(v) => updatePadSize({ width: meters(v) })}
         />
         <NumberField
-          label="深度"
+          label={t('深度', 'Depth')}
           value={cm(item.size.depth)}
           min={cm(MOUSEPAD_MIN_DEPTH)}
           max={cm(MOUSEPAD_MAX_DEPTH)}
@@ -2375,7 +2575,7 @@ export function MousepadSizeFields({
           onChange={(v) => updatePadSize({ depth: meters(v) })}
         />
         <NumberField
-          label="厚度"
+          label={t('厚度', 'Thickness')}
           value={thicknessMm}
           min={mm(MOUSEPAD_MIN_THICKNESS)}
           max={mm(MOUSEPAD_MAX_THICKNESS)}
@@ -2388,26 +2588,27 @@ export function MousepadSizeFields({
       <div
         className="monitor-presets"
         role="group"
-        aria-label="鼠标垫厚度预设"
+        aria-label={t('鼠标垫厚度预设', 'Thickness Presets')}
         style={{ marginTop: 10 }}
       >
-        {MOUSEPAD_THICKNESS_PRESETS.map((t) => (
+        {MOUSEPAD_THICKNESS_PRESETS.map((tp) => (
           <button
-            key={t.mm}
+            key={tp.mm}
             type="button"
-            className={Math.abs(thicknessMm - t.mm) < 0.05 ? 'active' : ''}
-            aria-pressed={Math.abs(thicknessMm - t.mm) < 0.05}
-            title={t.hint}
-            onClick={() => updatePadSize({ height: t.meters })}
+            className={Math.abs(thicknessMm - tp.mm) < 0.05 ? 'active' : ''}
+            aria-pressed={Math.abs(thicknessMm - tp.mm) < 0.05}
+            title={tp.hint}
+            onClick={() => updatePadSize({ height: tp.meters })}
           >
-            {t.label}
+            {tp.label}
           </button>
         ))}
       </div>
 
       <p className="field-note">
-        厚度限制在 {mm(MOUSEPAD_MIN_THICKNESS)}–{mm(MOUSEPAD_MAX_THICKNESS)} mm 合理区间（2 mm
-        硬朗竞速 · 4 mm 均衡主流 · 6 mm 加厚缓震），放置在鼠标垫上的设备会自动贴合垫面。
+        {lang === 'en'
+          ? `Thickness ${mm(MOUSEPAD_MIN_THICKNESS)}–${mm(MOUSEPAD_MAX_THICKNESS)} mm (2 mm speed · 4 mm standard · 6 mm cushion); items placed on the mat sit flush on top.`
+          : `厚度限制在 ${mm(MOUSEPAD_MIN_THICKNESS)}–${mm(MOUSEPAD_MAX_THICKNESS)} mm 合理区间（2 mm 硬朗竞速 · 4 mm 均衡主流 · 6 mm 加厚缓震），放置在鼠标垫上的设备会自动贴合垫面。`}
       </p>
     </>
   );
@@ -2420,6 +2621,8 @@ export function ControllerInspectorSection({
   item: SceneItem;
   onSafe: (fn: () => void) => void;
 }) {
+  const { lang } = useI18n();
+  const t = (zh: string, en: string) => (lang === 'en' ? en : zh);
   const updateItem = useEditor((s) => s.updateItem);
   if (item.kind !== 'controller') return null;
 
@@ -2439,9 +2642,13 @@ export function ControllerInspectorSection({
   return (
     <section className="property-section">
       <h4>
-        <Gamepad2 size={15} /> 手柄型号（PS5 / Xbox）
+        <Gamepad2 size={15} /> {t('手柄摇杆布局款式', 'Thumbstick Layout')}
       </h4>
-      <div className="desk-shape-presets" role="group" aria-label="手柄型号">
+      <div
+        className="desk-shape-presets"
+        role="group"
+        aria-label={t('手柄型号', 'Controller Layout')}
+      >
         {CONTROLLER_PRESETS.map((p) => (
           <button
             key={p.id}
@@ -2485,6 +2692,8 @@ export function SpeakerInspectorSection({
   item: SceneItem;
   onSafe: (fn: () => void) => void;
 }) {
+  const { lang } = useI18n();
+  const t = (zh: string, en: string) => (lang === 'en' ? en : zh);
   const { project, commit } = useEditor();
   if (item.kind !== 'speaker') return null;
 
@@ -2513,13 +2722,17 @@ export function SpeakerInspectorSection({
   return (
     <section className="property-section">
       <h4>
-        <Volume2 size={15} /> 桌面音响系统与接口架构
+        <Volume2 size={15} /> {t('桌面音响规格与接口架构', 'Speaker Spec & Architecture')}
       </h4>
 
       <p className="field-note" style={{ marginTop: 0, marginBottom: 6 }}>
-        标杆产品参考规格
+        {t('声学箱体规格', 'Cabinet Preset')}
       </p>
-      <div className="monitor-presets" role="group" aria-label="音响标杆型号">
+      <div
+        className="monitor-presets"
+        role="group"
+        aria-label={t('音响规格型号', 'Speaker Preset')}
+      >
         {SPEAKER_PRESETS.map((p) => (
           <button
             key={p.id}
@@ -2535,9 +2748,13 @@ export function SpeakerInspectorSection({
       </div>
 
       <p className="field-note" style={{ marginTop: 10, marginBottom: 6 }}>
-        声道箱体架构
+        {t('声道箱体架构', 'Channel Role')}
       </p>
-      <div className="desk-shape-presets" role="group" aria-label="音箱主副架构">
+      <div
+        className="desk-shape-presets"
+        role="group"
+        aria-label={t('音箱主副架构', 'Speaker Role')}
+      >
         {speakerRoleValues.map((role) => (
           <button
             key={role}
@@ -2560,7 +2777,10 @@ export function SpeakerInspectorSection({
         {cfg.role === 'active' && hasCompanionSpeaker && (
           <>
             <br />
-            下方可一键点击「插 主副箱线」连接配对副箱，并按需接入信号源与供电。
+            {t(
+              '下方可一键点击「插 主副箱线」连接配对副箱，并按需接入信号源与供电。',
+              'Use "Plug Speaker Wire" below to link the companion speaker.',
+            )}
           </>
         )}
       </p>
@@ -2575,12 +2795,31 @@ export function PowerStripInspectorSection({
   item: SceneItem;
   onSafe: (fn: () => void) => void;
 }) {
-  const { project, updateItem, commit } = useEditor();
+  const { lang } = useI18n();
+  const t = (zh: string, en: string) => (lang === 'en' ? en : zh);
+  const { project, updateItem, commit, configurePowerStripCord } = useEditor();
   if (item.kind !== 'powerStrip') return null;
 
   const cfg = item.powerStrip ?? defaultPowerStripSettings();
   const hasShelf = !project.desk.return && Boolean(project.desk.shelf?.enabled);
   const surfaceMode = item.surface ?? 'desk';
+  const mainsCord = (project.cables ?? []).find(
+    (c) =>
+      (c.from.type === 'device' && c.from.itemId === item.id && c.from.portId === 'ac-in') ||
+      (c.to.type === 'device' && c.to.itemId === item.id && c.to.portId === 'ac-in'),
+  );
+  const activeCordLen = mainsCord?.lengthM ?? cfg.cordLengthM ?? 1.8;
+  const activeCordPlug: 'cn3Pin' | 'rightAngle' =
+    mainsCord?.toPlugType === 'rightAngle' || mainsCord?.fromPlugType === 'rightAngle'
+      ? 'rightAngle'
+      : 'cn3Pin';
+  const pluggedOutlet =
+    mainsCord &&
+    (mainsCord.to.type === 'device' && mainsCord.to.itemId !== item.id
+      ? project.items.find((it) => it.id === (mainsCord.to as { itemId: string }).itemId)
+      : mainsCord.from.type === 'device' && mainsCord.from.itemId !== item.id
+        ? project.items.find((it) => it.id === (mainsCord.from as { itemId: string }).itemId)
+        : undefined);
 
   function updateCfg(patch: Partial<PowerStripSettings>) {
     const next: PowerStripSettings = { ...cfg, ...patch };
@@ -2600,13 +2839,76 @@ export function PowerStripInspectorSection({
   return (
     <section className="property-section">
       <h4>
-        <Plug size={15} /> 插排孔位与 USB 快充配置
+        <Plug size={15} /> {t('插排总电源线与孔位配置', 'Mains Cord & Outlet Configuration')}
       </h4>
 
       <p className="field-note" style={{ marginTop: 0, marginBottom: 6 }}>
-        孔位配列（行 × 列）
+        {t('自带总电源线长度', 'Built-in Mains Cord Length')}
       </p>
-      <div className="monitor-presets" role="group" aria-label="插排配列">
+      <div
+        className="cable-length-presets"
+        role="group"
+        aria-label={t('插排自带电源线长度', 'Power Strip Cord Length')}
+      >
+        {POWER_STRIP_CORD_LENGTHS.map((len) => (
+          <button
+            key={len}
+            type="button"
+            className={Math.abs(activeCordLen - len) < 1e-4 ? 'active' : ''}
+            onClick={() => onSafe(() => configurePowerStripCord(item.id, { cordLengthM: len }))}
+          >
+            {len}m
+          </button>
+        ))}
+      </div>
+
+      <div
+        className="desk-shape-presets"
+        role="group"
+        aria-label={t('插排插头形式', 'Mains Plug Style')}
+        style={{ marginTop: 8 }}
+      >
+        <button
+          type="button"
+          className={activeCordPlug === 'cn3Pin' ? 'active' : ''}
+          onClick={() => onSafe(() => configurePowerStripCord(item.id, { plugType: 'cn3Pin' }))}
+        >
+          {t('10A 三脚插头', '3-Pin Plug')}
+        </button>
+        <button
+          type="button"
+          className={activeCordPlug === 'rightAngle' ? 'active' : ''}
+          onClick={() => onSafe(() => configurePowerStripCord(item.id, { plugType: 'rightAngle' }))}
+        >
+          {t('90° 贴墙弯头', '90° Flush Plug')}
+        </button>
+      </div>
+
+      <div style={{ marginTop: 8, marginBottom: 12 }}>
+        {pluggedOutlet ? (
+          <p className="field-note" style={{ margin: 0 }}>
+            {lang === 'en'
+              ? `Plugged into "${pluggedOutlet.name}" (${activeCordLen}m cord).`
+              : `已插入「${pluggedOutlet.name}」（${activeCordLen}m 电源线）。`}
+          </p>
+        ) : (
+          <button
+            type="button"
+            className="primary-button"
+            style={{ width: '100%', justifyContent: 'center' }}
+            onClick={() =>
+              onSafe(() => configurePowerStripCord(item.id, { plugIntoWallOutlet: true }))
+            }
+          >
+            {t('一键插入墙面五孔插座供电', 'Plug Strip into Wall Outlet')}
+          </button>
+        )}
+      </div>
+
+      <p className="field-note" style={{ marginTop: 0, marginBottom: 6 }}>
+        {t('孔位配列（行 × 列）', 'Outlet Grid (Rows × Cols)')}
+      </p>
+      <div className="monitor-presets" role="group" aria-label={t('插排配列', 'Strip Layout')}>
         {powerStripLayoutValues.map((layout) => (
           <button
             key={layout}
@@ -2621,9 +2923,13 @@ export function PowerStripInspectorSection({
       </div>
 
       <p className="field-note" style={{ marginTop: 10, marginBottom: 6 }}>
-        插孔形式
+        {t('插孔形式', 'Socket Type')}
       </p>
-      <div className="desk-shape-presets" role="group" aria-label="插排插孔形式">
+      <div
+        className="desk-shape-presets"
+        role="group"
+        aria-label={t('插排插孔形式', 'Socket Type')}
+      >
         {powerOutletTypeValues.map((ot) => (
           <button
             key={ot}
@@ -2638,9 +2944,13 @@ export function PowerStripInspectorSection({
       </div>
 
       <p className="field-note" style={{ marginTop: 10, marginBottom: 6 }}>
-        附带 USB-A 接口数量
+        {t('附带 USB-A 接口数量', 'USB-A Ports')}
       </p>
-      <div className="monitor-presets" role="group" aria-label="插排 USB-A 数量">
+      <div
+        className="monitor-presets"
+        role="group"
+        aria-label={t('插排 USB-A 数量', 'USB-A Count')}
+      >
         {[0, 1, 2, 3, 4].map((count) => (
           <button
             key={count}
@@ -2649,15 +2959,19 @@ export function PowerStripInspectorSection({
             aria-pressed={cfg.usbA === count}
             onClick={() => updateCfg({ usbA: count })}
           >
-            {count === 0 ? '无 USB-A' : `${count} 口`}
+            {count === 0 ? t('无 USB-A', 'None') : lang === 'en' ? `${count}` : `${count} 口`}
           </button>
         ))}
       </div>
 
       <p className="field-note" style={{ marginTop: 10, marginBottom: 6 }}>
-        附带 Type-C 接口数量
+        {t('附带 Type-C 接口数量', 'Type-C Ports')}
       </p>
-      <div className="monitor-presets" role="group" aria-label="插排 Type-C 数量">
+      <div
+        className="monitor-presets"
+        role="group"
+        aria-label={t('插排 Type-C 数量', 'Type-C Count')}
+      >
         {[0, 1, 2, 3, 4].map((count) => (
           <button
             key={count}
@@ -2666,7 +2980,7 @@ export function PowerStripInspectorSection({
             aria-pressed={cfg.usbC === count}
             onClick={() => updateCfg({ usbC: count })}
           >
-            {count === 0 ? '无 Type-C' : `${count} 口`}
+            {count === 0 ? t('无 Type-C', 'None') : lang === 'en' ? `${count}` : `${count} 口`}
           </button>
         ))}
       </div>
@@ -2677,20 +2991,24 @@ export function PowerStripInspectorSection({
           checked={cfg.masterSwitch}
           onChange={(e) => updateCfg({ masterSwitch: e.target.checked })}
         />
-        <span>配备总控开关与电源指示灯</span>
+        <span>{t('配备总控开关与电源指示灯', 'Master Switch & LED')}</span>
       </label>
 
       <p className="field-note" style={{ marginTop: 10, marginBottom: 6 }}>
-        放置位置
+        {t('放置位置', 'Placement Surface')}
       </p>
-      <div className="desk-shape-presets" role="group" aria-label="插排放置位置">
+      <div
+        className="desk-shape-presets"
+        role="group"
+        aria-label={t('插排放置位置', 'Strip Placement')}
+      >
         <button
           type="button"
           className={surfaceMode === 'desk' ? 'active' : ''}
           aria-pressed={surfaceMode === 'desk'}
           onClick={() => onSafe(() => updateItem(item.id, { surface: undefined }))}
         >
-          主桌面
+          {t('主桌面', 'Desktop')}
         </button>
         {hasShelf && (
           <button
@@ -2699,7 +3017,7 @@ export function PowerStripInspectorSection({
             aria-pressed={surfaceMode === 'shelf'}
             onClick={() => onSafe(() => updateItem(item.id, { surface: 'shelf' }))}
           >
-            等宽层架
+            {t('等宽层架', 'Riser Shelf')}
           </button>
         )}
         <button
@@ -2708,7 +3026,7 @@ export function PowerStripInspectorSection({
           aria-pressed={surfaceMode === 'floor'}
           onClick={() => onSafe(() => updateItem(item.id, { surface: 'floor' }))}
         >
-          桌下地面
+          {t('桌下地面', 'Under-Desk Floor')}
         </button>
       </div>
     </section>
@@ -2722,6 +3040,8 @@ export function WallOutletInspectorSection({
   item: SceneItem;
   onSafe: (fn: () => void) => void;
 }) {
+  const { lang } = useI18n();
+  const t = (zh: string, en: string) => (lang === 'en' ? en : zh);
   const { project, updateItem, commit } = useEditor();
   if (item.kind !== 'wallOutlet') return null;
 
@@ -2781,17 +3101,21 @@ export function WallOutletInspectorSection({
   return (
     <section className="property-section">
       <h4>
-        <Plug size={15} /> 插座安装方式与孔位规格
+        <Plug size={15} /> {t('插座安装方式与孔位规格', 'Outlet Mount & Socket Spec')}
       </h4>
 
-      <div className="desk-shape-presets" role="group" aria-label="插座安装方式">
+      <div
+        className="desk-shape-presets"
+        role="group"
+        aria-label={t('插座安装方式', 'Outlet Mount')}
+      >
         <button
           type="button"
           className={isWall ? 'active' : ''}
           aria-pressed={isWall}
           onClick={() => setMount('wall')}
         >
-          附着墙面
+          {t('附着墙面', 'Wall Socket')}
         </button>
         <button
           type="button"
@@ -2799,14 +3123,18 @@ export function WallOutletInspectorSection({
           aria-pressed={!isWall}
           onClick={() => setMount('floor')}
         >
-          附着地面
+          {t('附着地面', 'Floor Box')}
         </button>
       </div>
 
       <p className="field-note" style={{ marginTop: 10, marginBottom: 6 }}>
-        插孔形式
+        {t('插孔形式', 'Socket Type')}
       </p>
-      <div className="desk-shape-presets" role="group" aria-label="插座插孔形式">
+      <div
+        className="desk-shape-presets"
+        role="group"
+        aria-label={t('插座插孔形式', 'Socket Type')}
+      >
         {powerOutletTypeValues.map((ot) => (
           <button
             key={ot}
@@ -2821,9 +3149,16 @@ export function WallOutletInspectorSection({
       </div>
 
       <p className="field-note" style={{ marginTop: 10, marginBottom: 6 }}>
-        附带 USB-A 供电口（墙面 / 地面插座仅支持单联独立面板，不含 Type-C）
+        {t(
+          '附带 USB-A 供电口（墙面 / 地面插座仅支持单联独立面板，不含 Type-C）',
+          'Built-in USB-A Ports (Single-gang plate, no Type-C)',
+        )}
       </p>
-      <div className="monitor-presets" role="group" aria-label="插座 USB-A 数量">
+      <div
+        className="monitor-presets"
+        role="group"
+        aria-label={t('插座 USB-A 数量', 'Outlet USB-A Count')}
+      >
         {[0, 1, 2].map((count) => (
           <button
             key={count}
@@ -2832,19 +3167,21 @@ export function WallOutletInspectorSection({
             aria-pressed={cfg.usbA === count}
             onClick={() => updateCfg({ usbA: count })}
           >
-            {count === 0 ? '无 USB-A' : `${count} × USB-A`}
+            {count === 0 ? t('无 USB-A', 'None') : `${count} × USB-A`}
           </button>
         ))}
       </div>
       <p className="field-note" style={{ marginTop: 8 }}>
-        每个插座为独立 86 型 /
-        地插单元，请逐个添加并用左键拖拽靠近已有插座，系统会自动磁吸紧贴对齐。
+        {t(
+          '每个插座为独立 86 型 / 地插单元，请逐个添加并用左键拖拽靠近已有插座，系统会自动磁吸紧贴对齐。',
+          'Each socket is an independent 86-type unit; drag near an existing socket to magnetically snap flush.',
+        )}
       </p>
 
       {isWall && (
         <div className="field-grid" style={{ marginTop: 10 }}>
           <NumberField
-            label="离地高度"
+            label={t('离地高度', 'Floor Height')}
             value={cm(item.wallY ?? WALL_OUTLET_DEFAULT_Y)}
             min={4}
             max={Math.max(15, cm(maxWallTopY - item.size.height))}

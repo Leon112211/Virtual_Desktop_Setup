@@ -1,3 +1,5 @@
+// CS50x Final Project — DeskCraft
+// AI Assistance Disclosure: Developed under the author's design & domain rules with assistance from AI coding tools (see src/App.tsx & README.md).
 import { Component, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls, Grid, GizmoHelper, GizmoViewport } from '@react-three/drei';
@@ -12,6 +14,7 @@ import { useEditor } from '../store/editorStore';
 import { applyDragPreview } from '../domain/monitorArm';
 import { isMonitorMountedOnArm } from '../domain/laptop';
 import { isOutOfBounds } from '../domain/placement';
+import { tr, useI18n } from '../i18n';
 export type View = { kind: 'perspective' | 'top' | 'front' | 'fit'; nonce: number };
 class SceneBoundary extends Component<{ children: ReactNode }, { error: boolean }> {
   state = { error: false };
@@ -21,9 +24,16 @@ class SceneBoundary extends Component<{ children: ReactNode }, { error: boolean 
   render() {
     return this.state.error ? (
       <div className="scene-fallback">
-        <strong>三维预览暂时不可用</strong>
-        <p>请使用支持 WebGL 的浏览器并开启硬件加速。你的布局仍可通过属性面板编辑、导出。</p>
-        <button onClick={() => this.setState({ error: false })}>重试预览</button>
+        <strong>{tr('三维预览暂时不可用', '3D Preview Unavailable')}</strong>
+        <p>
+          {tr(
+            '请使用支持 WebGL 的浏览器并开启硬件加速。你的布局仍可通过属性面板编辑、导出。',
+            'Please enable WebGL hardware acceleration. You can still edit and export your layout via the inspector.',
+          )}
+        </p>
+        <button onClick={() => this.setState({ error: false })}>
+          {tr('重试预览', 'Retry Preview')}
+        </button>
       </div>
     ) : (
       this.props.children
@@ -46,6 +56,10 @@ function World({ view, onError }: { view: View; onError: (m: string) => void }) 
     [project, effectiveItems, dragPreview],
   );
   const { camera, invalidate, gl, size } = useThree();
+  const lang = useI18n((s) => s.lang);
+  useEffect(() => {
+    invalidate();
+  }, [lang, invalidate]);
   const sizeRef = useRef(size);
   sizeRef.current = size;
   const { desk } = project;
@@ -57,7 +71,12 @@ function World({ view, onError }: { view: View; onError: (m: string) => void }) 
   const hasLamps = lamps.length > 0;
   useEffect(() => {
     if (hasLamps && !lampSupported)
-      onError('当前设备的纹理采样能力不足，挂灯预览已停用；工程中的挂灯数据仍保留。');
+      onError(
+        tr(
+          '当前设备的纹理采样能力不足，挂灯预览已停用；工程中的挂灯数据仍保留。',
+          'Insufficient GPU texture units: light bar preview disabled, but settings are preserved.',
+        ),
+      );
   }, [hasLamps, lampSupported, onError]);
   const returnSide = desk.return?.side;
   const returnWidth = desk.return?.width;
@@ -262,6 +281,7 @@ function World({ view, onError }: { view: View; onError: (m: string) => void }) 
   );
 }
 export default function DeskScene({ view, onError }: { view: View; onError: (m: string) => void }) {
+  const lang = useI18n((s) => s.lang);
   const downPos = useRef<{ x: number; y: number } | null>(null);
   return (
     <SceneBoundary>
@@ -280,7 +300,15 @@ export default function DeskScene({ view, onError }: { view: View; onError: (m: 
           const dist = d ? Math.hypot(e.clientX - d.x, e.clientY - d.y) : 0;
           if (e.button === 0 && dist <= 5) useEditor.getState().select(null);
         }}
-        fallback={<div className="scene-fallback">浏览器不支持 WebGL。请开启硬件加速后重试。</div>}
+        fallback={
+          <div className="scene-fallback">
+            {tr(
+              '浏览器不支持 WebGL。请开启硬件加速后重试。',
+              'WebGL is not supported. Please enable hardware acceleration and retry.',
+              lang,
+            )}
+          </div>
+        }
       >
         <World view={view} onError={onError} />
       </Canvas>

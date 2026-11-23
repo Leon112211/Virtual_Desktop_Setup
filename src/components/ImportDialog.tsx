@@ -1,10 +1,14 @@
+// CS50x Final Project — DeskCraft
+// AI Assistance Disclosure: Developed under the author's design & domain rules with assistance from AI coding tools (see src/App.tsx & README.md).
 import { useEffect, useMemo, useRef } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import { X, Ruler, ShieldCheck } from 'lucide-react';
 import type { LoadedModel } from '../assets/importModel';
 import { cm } from '../domain/project';
+import { useI18n } from '../i18n';
 import { NumberField } from './Inspector';
+
 export default function ImportDialog({
   model,
   name,
@@ -20,9 +24,12 @@ export default function ImportDialog({
   onClose: () => void;
   onAccept: () => void;
 }) {
+  const { lang } = useI18n();
+  const t = (zh: string, en: string) => (lang === 'en' ? en : zh);
   const ref = useRef<HTMLDivElement>(null);
   const instance = useMemo(() => model.root.clone(true), [model]);
   const factor = longest / 30;
+
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
     const dialog = ref.current;
@@ -53,6 +60,7 @@ export default function ImportDialog({
       previous?.focus();
     };
   }, [onClose]);
+
   return (
     <div className="modal-shade">
       <div
@@ -64,10 +72,14 @@ export default function ImportDialog({
       >
         <div className="dialog-title">
           <div>
-            <span className="section-caption">新的桌面成员</span>
-            <h2 id="import-title">确认模型尺寸</h2>
+            <span className="section-caption">{t('新的桌面成员', 'New Desk Item')}</span>
+            <h2 id="import-title">{t('确认模型尺寸', 'Confirm Model Scale')}</h2>
           </div>
-          <button className="icon-button" aria-label="关闭导入" onClick={onClose}>
+          <button
+            className="icon-button"
+            aria-label={t('关闭导入', 'Close Import')}
+            onClick={onClose}
+          >
             <X size={20} />
           </button>
         </div>
@@ -85,10 +97,13 @@ export default function ImportDialog({
         </div>
         <h3 className="import-filename">{name}</h3>
         <p className="dialog-copy">
-          模型已自动对齐底部中心。文件中的单位不一定等于真实尺寸，请按实物校正后添加。
+          {t(
+            '模型已自动对齐底部中心。文件中的单位不一定等于真实尺寸，请按实物校正后添加。',
+            'Model is auto-centered on its base. File units may vary—calibrate the longest edge to real dimensions before adding.',
+          )}
         </p>
         <NumberField
-          label="模型最长边"
+          label={t('模型最长边', 'Longest Edge')}
           value={longest}
           min={1}
           max={200}
@@ -98,16 +113,17 @@ export default function ImportDialog({
         <div className="import-dimensions">
           <Ruler size={15} />
           {cm(model.size.width * factor)} × {cm(model.size.depth * factor)} ×{' '}
-          {cm(model.size.height * factor)} cm<span>宽 × 深 × 高 · 等比</span>
+          {cm(model.size.height * factor)} cm
+          <span>{t('宽 × 深 × 高 · 等比', 'W × D × H · Uniform Scale')}</span>
         </div>
         <div className="privacy-note">
           <ShieldCheck size={15} />
-          仅在本地处理，不会上传到服务器
+          {t('仅在本地处理，不会上传到服务器', 'Processed locally—never uploaded to any server')}
         </div>
         <div className="dialog-actions">
-          <button onClick={onClose}>取消</button>
+          <button onClick={onClose}>{t('取消', 'Cancel')}</button>
           <button className="primary-button" onClick={onAccept}>
-            添加到桌面
+            {t('添加到桌面', 'Add to Desk')}
           </button>
         </div>
       </div>

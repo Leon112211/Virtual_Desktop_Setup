@@ -1,42 +1,97 @@
+// CS50x Final Project — DeskCraft
+// AI Assistance Disclosure: Developed under the author's design & domain rules with assistance from AI coding tools (see src/App.tsx & README.md).
 import { z } from 'zod';
 import type { Size } from './project';
+import { tr } from '../i18n';
 
 export const MAX_LID_ANGLE = 135;
 export const DEFAULT_LID_ANGLE = 108;
 
 export type DevicePreset = {
   id: string;
-  label: string;
+  readonly label: string;
   size: Size;
 };
 
 export const gamingLaptopPresets: DevicePreset[] = [
-  { id: '14', label: '14" 游戏本', size: { width: 0.315, height: 0.021, depth: 0.228 } },
-  { id: '15.6', label: '15.6" 游戏本', size: { width: 0.359, height: 0.024, depth: 0.258 } },
-  { id: '16', label: '16" 游戏本', size: { width: 0.356, height: 0.023, depth: 0.262 } },
-  { id: '17.3', label: '17.3" 游戏本', size: { width: 0.397, height: 0.026, depth: 0.284 } },
+  {
+    id: '14',
+    get label() {
+      return tr('14" 游戏本', '14" Gaming');
+    },
+    size: { width: 0.315, height: 0.021, depth: 0.228 },
+  },
+  {
+    id: '15.6',
+    get label() {
+      return tr('15.6" 游戏本', '15.6" Gaming');
+    },
+    size: { width: 0.359, height: 0.024, depth: 0.258 },
+  },
+  {
+    id: '16',
+    get label() {
+      return tr('16" 游戏本', '16" Gaming');
+    },
+    size: { width: 0.356, height: 0.023, depth: 0.262 },
+  },
+  {
+    id: '17.3',
+    get label() {
+      return tr('17.3" 游戏本', '17.3" Gaming');
+    },
+    size: { width: 0.397, height: 0.026, depth: 0.284 },
+  },
 ];
 
-export type MacBookColor = { hex: string; label: string };
+export type MacBookColor = { hex: string; readonly label: string };
 
 export const macbookPresets: DevicePreset[] = [
-  { id: 'air13', label: 'Air 13"', size: { width: 0.3041, height: 0.0113, depth: 0.215 } },
-  { id: 'pro14', label: 'Pro 14"', size: { width: 0.3126, height: 0.0155, depth: 0.2212 } },
-  { id: 'air15', label: 'Air 15"', size: { width: 0.3404, height: 0.0115, depth: 0.2376 } },
-  { id: 'pro16', label: 'Pro 16"', size: { width: 0.3557, height: 0.0168, depth: 0.2481 } },
+  {
+    id: 'air13',
+    get label() {
+      return tr('13" 轻薄款', '13" Slim');
+    },
+    size: { width: 0.3041, height: 0.0113, depth: 0.215 },
+  },
+  {
+    id: 'pro14',
+    get label() {
+      return tr('14" 旗舰款', '14" Flagship');
+    },
+    size: { width: 0.3126, height: 0.0155, depth: 0.2212 },
+  },
+  {
+    id: 'air15',
+    get label() {
+      return tr('15" 轻薄款', '15" Slim');
+    },
+    size: { width: 0.3404, height: 0.0115, depth: 0.2376 },
+  },
+  {
+    id: 'pro16',
+    get label() {
+      return tr('16" 旗舰款', '16" Flagship');
+    },
+    size: { width: 0.3557, height: 0.0168, depth: 0.2481 },
+  },
 ];
 
-/** Official 14-inch MacBook Pro chassis editions (2024–2026 Standard vs 2026 PROLED XDR). */
+/** 14-inch unibody laptop chassis editions (Standard 15.5 mm vs Slim Bezel 15.0 mm). */
 export const MACBOOK_PRO_14_VARIANTS = {
   standard: {
     id: 'standard',
-    label: '2024–2026 标准版',
+    get label() {
+      return tr('标准机身版', 'Standard Chassis');
+    },
     summary: '312.6 × 221.2 × 15.5 mm',
     size: { width: 0.3126, height: 0.0155, depth: 0.2212 },
   },
   proled: {
     id: 'proled',
-    label: '2026 PROLED XDR',
+    get label() {
+      return tr('超窄边机身版', 'Ultra-Slim Bezel');
+    },
     summary: '310.8 × 216.3 × 15.0 mm',
     size: { width: 0.3108, height: 0.015, depth: 0.2163 },
   },
@@ -52,17 +107,57 @@ export function isMacbookPro14ProledSize(size: Size): boolean {
 }
 
 export const macbookAirColors: MacBookColor[] = [
-  { hex: '#c4d4e0', label: '天蓝色' },
-  { hex: '#e3e4e6', label: '银色' },
-  { hex: '#f0e4d3', label: '星光色' },
-  { hex: '#2c323d', label: '午夜色' },
-  { hex: '#7d7f84', label: '深空灰色' },
+  {
+    hex: '#c4d4e0',
+    get label() {
+      return tr('冰川蓝', 'Ice Blue');
+    },
+  },
+  {
+    hex: '#e3e4e6',
+    get label() {
+      return tr('星耀银', 'Silver');
+    },
+  },
+  {
+    hex: '#f0e4d3',
+    get label() {
+      return tr('香槟金', 'Champagne');
+    },
+  },
+  {
+    hex: '#2c323d',
+    get label() {
+      return tr('暗夜蓝', 'Midnight Blue');
+    },
+  },
+  {
+    hex: '#7d7f84',
+    get label() {
+      return tr('深空灰', 'Space Gray');
+    },
+  },
 ];
 
 export const macbookProColors: MacBookColor[] = [
-  { hex: '#2e3034', label: '深空黑色' },
-  { hex: '#e3e4e6', label: '银色' },
-  { hex: '#7d7f84', label: '深空灰色' },
+  {
+    hex: '#2e3034',
+    get label() {
+      return tr('曜石黑', 'Obsidian Black');
+    },
+  },
+  {
+    hex: '#e3e4e6',
+    get label() {
+      return tr('星耀银', 'Silver');
+    },
+  },
+  {
+    hex: '#7d7f84',
+    get label() {
+      return tr('深空灰', 'Space Gray');
+    },
+  },
 ];
 
 export function isMacbookProSize(size: Size): boolean {
@@ -103,10 +198,18 @@ export function isOfficialGamingLaptopSpec(size: Size): boolean {
 export const macMiniPresets: DevicePreset[] = [
   {
     id: 'm4',
-    label: '2026 / M4 (127.2 mm)',
+    get label() {
+      return tr('紧凑方盒款 (127.2 mm)', 'Compact Cube (127.2 mm)');
+    },
     size: { width: 0.1272, height: 0.0497, depth: 0.1271 },
   },
-  { id: 'classic', label: '经典 (197 mm)', size: { width: 0.197, height: 0.036, depth: 0.197 } },
+  {
+    id: 'classic',
+    get label() {
+      return tr('扁平经典款 (197 mm)', 'Low-Profile (197 mm)');
+    },
+    size: { width: 0.197, height: 0.036, depth: 0.197 },
+  },
 ];
 
 export function matchDevicePresetId(presets: DevicePreset[], size: Size): string | null {
@@ -125,28 +228,42 @@ export const LAPTOP_STAND_PRESETS: Record<
   LaptopStandModelId,
   {
     id: LaptopStandModelId;
-    label: string;
+    readonly label: string;
     size: Size;
     elevation: number;
     tiltDeg: number;
-    note: string;
+    readonly note: string;
   }
 > = {
   curveFlex: {
     id: 'curveFlex',
-    label: 'Curve Flex (双铰链可调)',
+    get label() {
+      return tr('双铰链可调款', 'Dual-Hinge Adjustable');
+    },
     size: { width: 0.264, height: 0.14, depth: 0.224 },
     elevation: 0.14,
     tiltDeg: 18,
-    note: 'Twelve South Curve Flex · 264 × 224 mm · 折叠 30 mm / 最高 274 mm · 底脚内距 185 mm · 倾角 0°–45°',
+    get note() {
+      return tr(
+        '双转轴折叠铝合金支架 · 264 × 224 mm · 高度 30–274 mm · 底脚内距 185 mm · 倾角 0°–45°',
+        'Dual-hinge folding aluminum stand · 264 × 224 mm · 30–274 mm height · 0°–45° tilt',
+      );
+    },
   },
   mStand: {
     id: 'mStand',
-    label: 'Rain Design mStand (固定式)',
+    get label() {
+      return tr('一体铝合金固定款', 'Unibody Fixed Stand');
+    },
     size: { width: 0.253, height: 0.15, depth: 0.19 },
     elevation: 0.118,
     tiltDeg: 18,
-    note: 'Rain Design mStand · 253 × 190 × 150 mm · 2.5 mm 一体铝合金 · 后部 Ø50.8 mm 理线孔',
+    get note() {
+      return tr(
+        '一体弯折铝合金支架 · 253 × 190 × 150 mm · 2.5 mm 喷砂铝板 · 后部 Ø50.8 mm 理线孔',
+        'One-piece sandblasted aluminum stand · 253 × 190 × 150 mm · Ø50.8 mm rear cable hole',
+      );
+    },
   },
 };
 
@@ -273,20 +390,23 @@ export function armTargetSummary(
   arm: MonitorArmSettings | undefined,
   items: { id: string; name: string }[],
 ): string {
-  if (!arm) return '显示器支架臂';
+  if (!arm) return tr('显示器支架臂', 'Monitor Arm');
   const nameOf = (id?: string) => items.find((i) => i.id === id)?.name;
   const parts: string[] = [];
   const pm = armPrimaryMonitorId(arm);
   const pl = armPrimaryLaptopId(arm);
   const sm = armSecondaryMonitorId(arm);
   const sl = armSecondaryLaptopId(arm);
-  if (pm) parts.push(nameOf(pm) ?? '显示器');
-  if (pl) parts.push(`${nameOf(pl) ?? '笔记本'}（托盘）`);
-  if (sm) parts.push(nameOf(sm) ?? '副显示器');
-  if (sl) parts.push(`${nameOf(sl) ?? '笔记本'}（托盘）`);
+  if (pm) parts.push(nameOf(pm) ?? tr('显示器', 'Monitor'));
+  if (pl) parts.push(`${nameOf(pl) ?? tr('笔记本', 'Laptop')}${tr('（托盘）', ' (Tray)')}`);
+  if (sm) parts.push(nameOf(sm) ?? tr('副显示器', 'Secondary Monitor'));
+  if (sl) parts.push(`${nameOf(sl) ?? tr('笔记本', 'Laptop')}${tr('（托盘）', ' (Tray)')}`);
   const tags: string[] = [];
-  if (arm.armStyle === 'dual') tags.push('双臂');
-  if (arm.mountOrientation === 'inverted') tags.push('倒挂');
+  if (arm.armStyle === 'dual') tags.push(tr('双臂', 'Dual'));
+  if (arm.mountOrientation === 'inverted') tags.push(tr('倒挂', 'Inverted'));
   const prefix = tags.length ? `${tags.join('·')} ` : '';
-  return `${prefix}挂载 ${parts.join(' + ') || '未绑定'}`;
+  return tr(
+    `${prefix}挂载 ${parts.join(' + ') || '未绑定'}`,
+    `${prefix}Mounted: ${parts.join(' + ') || 'Unbound'}`,
+  );
 }

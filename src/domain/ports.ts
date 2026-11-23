@@ -1,3 +1,5 @@
+// CS50x Final Project — DeskCraft
+// AI Assistance Disclosure: Developed under the author's design & domain rules with assistance from AI coding tools (see src/App.tsx & README.md).
 import { Euler, Quaternion, Vector3 } from 'three';
 import {
   deskBackWallBounds,
@@ -24,6 +26,7 @@ import {
 } from './power';
 import { defaultSpeakerSettings, speakerPresetById } from './speaker';
 import type { BuiltinKind, Desk, SceneItem } from './project';
+import { tr } from '../i18n';
 
 export type PortSocketKind =
   | 'hdmi'
@@ -53,8 +56,8 @@ export const PORT_SOCKET_SPECS: Record<
   usbc: { width: 0.0086, height: 0.0028, label: 'USB Type-C (8.6 × 2.8 mm)' },
   tf: { width: 0.0115, height: 0.0014, label: 'TF / microSD (11.5 × 1.4 mm)' },
   sd: { width: 0.0246, height: 0.0023, label: 'SD / SDXC (24.6 × 2.3 mm)' },
-  magsafe3: { width: 0.0146, height: 0.0038, label: 'Apple MagSafe 3 (14.6 × 3.8 mm)' },
-  rj45: { width: 0.016, height: 0.0132, label: 'RJ45 屏蔽网口 (16.0 × 13.2 mm)' },
+  magsafe3: { width: 0.0146, height: 0.0038, label: 'Magnetic Charge (14.6 × 3.8 mm)' },
+  rj45: { width: 0.016, height: 0.0132, label: 'RJ45 Ethernet (16.0 × 13.2 mm)' },
   powerAc: { width: 0.0155, height: 0.0088, label: 'AC 8 字尾电源口 (15.5 × 8.8 mm)' },
   iecC14: { width: 0.0275, height: 0.0195, label: 'IEC C14 三插电源口 (27.5 × 19.5 mm)' },
   rca: { width: 0.021, height: 0.0095, label: 'RCA 双莲花口 (L/R 同轴 21.0 × 9.5 mm)' },
@@ -104,28 +107,28 @@ export function devicePorts(
       return [
         {
           id: 'usbc',
-          label: '雷雳 3 / USB-C (96W)',
+          label: tr('USB4 / Type-C 上行 (96W)', 'USB4 / Type-C Upstream (96W)'),
           kind: 'usbc',
           localPos: [-0.074, y, z],
           localDir: [0, -0.15, -1],
         },
         {
           id: 'usbc2',
-          label: 'USB-C 下行口 1',
+          label: tr('USB-C 下行口 1', 'USB-C Downstream 1'),
           kind: 'usbc',
           localPos: [-0.09, y, z],
           localDir: [0, -0.15, -1],
         },
         {
           id: 'usbc3',
-          label: 'USB-C 下行口 2',
+          label: tr('USB-C 下行口 2', 'USB-C Downstream 2'),
           kind: 'usbc',
           localPos: [-0.106, y, z],
           localDir: [0, -0.15, -1],
         },
         {
           id: 'power',
-          label: '编织电源线 (AC)',
+          label: tr('编织电源线 (AC)', 'Braided AC Power'),
           kind: 'power',
           localPos: [0.082, y, z],
           localDir: [0, -0.25, -1],
@@ -137,7 +140,7 @@ export function devicePorts(
     return [
       {
         id: 'dp',
-        label: 'DisplayPort 1.4 输入',
+        label: tr('DisplayPort 1.4 输入', 'DisplayPort 1.4 In'),
         kind: 'dp',
         localPos: [0.041, y, z],
         localDir: [0, -1, 0],
@@ -151,28 +154,28 @@ export function devicePorts(
       },
       {
         id: 'usbc',
-        label: 'Thunderbolt 4 (140W)',
+        label: tr('USB4 / Type-C (140W)', 'USB4 / Type-C (140W)'),
         kind: 'usbc',
         localPos: [-0.017, y, z],
         localDir: [0, -1, 0],
       },
       {
         id: 'usba',
-        label: 'USB-A 下行口',
+        label: tr('USB-A 下行口', 'USB-A Downstream'),
         kind: 'usba',
         localPos: [-0.055, y, z],
         localDir: [0, -1, 0],
       },
       {
         id: 'audioOut',
-        label: '3.5mm 音频输出',
+        label: tr('3.5mm 音频输出', '3.5mm Audio Out'),
         kind: 'aux35',
         localPos: [-0.075, y, z],
         localDir: [0, -1, 0],
       },
       {
         id: 'power',
-        label: 'AC 电源输入',
+        label: tr('AC 电源输入', 'AC Power In'),
         kind: 'power',
         localPos: [0.1, y, z],
         localDir: [0, -1, 0],
@@ -205,28 +208,28 @@ export function devicePorts(
       },
       {
         id: 'rj45',
-        label: 'RJ45 网口',
+        label: tr('RJ45 网口', 'RJ45 Ethernet'),
         kind: 'rj45',
         localPos: [w * 0.15, y, -d / 2],
         localDir: [0, 0, -1],
       },
       {
         id: 'power',
-        label: '电源口',
+        label: tr('电源口', 'DC Power'),
         kind: 'power',
         localPos: [w * 0.28, y, -d / 2],
         localDir: [0, 0, -1],
       },
       {
         id: 'audio',
-        label: '3.5mm 音频口',
+        label: tr('3.5mm 音频口', '3.5mm Audio'),
         kind: 'aux35',
         localPos: [-w / 2, y, d * 0.08],
         localDir: [-1, 0, 0],
       },
       {
         id: 'usba',
-        label: 'USB-A (右侧)',
+        label: tr('USB-A (右侧)', 'USB-A (Right)'),
         kind: 'usba',
         localPos: [w / 2, y, -d * 0.1],
         localDir: [1, 0, 0],
@@ -238,21 +241,21 @@ export function devicePorts(
     return [
       {
         id: 'usbc1',
-        label: '雷雳 / USB-C 1',
+        label: 'USB4 / Type-C 1',
         kind: 'usbc',
         localPos: [-w / 2, y, -d * 0.17],
         localDir: [-1, 0, 0],
       },
       {
         id: 'usbc2',
-        label: '雷雳 / USB-C 2',
+        label: 'USB4 / Type-C 2',
         kind: 'usbc',
         localPos: [-w / 2, y, -d * 0.06],
         localDir: [-1, 0, 0],
       },
       {
         id: 'audio',
-        label: '3.5mm 音频口',
+        label: tr('3.5mm 音频口', '3.5mm Audio'),
         kind: 'aux35',
         localPos: [-w / 2, y, d * 0.06],
         localDir: [-1, 0, 0],
@@ -266,7 +269,7 @@ export function devicePorts(
       },
       {
         id: 'power',
-        label: 'MagSafe 3 电源',
+        label: tr('磁吸充电口', 'Magnetic Charge'),
         kind: 'magsafe',
         localPos: [-w / 2, y, -d * 0.3],
         localDir: [-1, 0, 0],
@@ -281,7 +284,7 @@ export function devicePorts(
     return [
       {
         id: 'audio',
-        label: '3.5mm 音频口',
+        label: tr('3.5mm 音频口', '3.5mm Audio'),
         kind: 'aux35',
         localPos: [-w * 0.34, y - 0.0014, z],
         localDir: [0, 0, -1],
@@ -295,28 +298,28 @@ export function devicePorts(
       },
       {
         id: 'rj45',
-        label: '10Gb RJ45 网口',
+        label: tr('10Gb RJ45 网口', '10Gb RJ45 Ethernet'),
         kind: 'rj45',
         localPos: [w * 0.122, y, z],
         localDir: [0, 0, -1],
       },
       {
         id: 'usbc1',
-        label: '雷雳 5 / USB-C 1',
+        label: 'USB4 / Type-C 1',
         kind: 'usbc',
         localPos: [w * 0.345, y, z],
         localDir: [0, 0, -1],
       },
       {
         id: 'usbc2',
-        label: '雷雳 5 / USB-C 2',
+        label: 'USB4 / Type-C 2',
         kind: 'usbc',
         localPos: [w * 0.295, y, z],
         localDir: [0, 0, -1],
       },
       {
         id: 'power',
-        label: 'AC 电源口',
+        label: tr('AC 电源口', 'AC Power In'),
         kind: 'power',
         localPos: [w * 0.002, y, z],
         localDir: [0, 0, -1],
@@ -334,21 +337,21 @@ export function devicePorts(
       return [
         {
           id: 'audio',
-          label: '3.5mm 耳机孔（前置）',
+          label: tr('3.5mm 耳机孔（前置）', 'Front 3.5mm Audio'),
           kind: 'aux35',
           localPos: [w * 0.295, yFront, d / 2],
           localDir: [0, 0, 1],
         },
         {
           id: 'power',
-          label: 'AC 电源口',
+          label: tr('AC 电源口', 'AC Power In'),
           kind: 'power',
           localPos: [w * 0.258, y, zRear],
           localDir: [0, 0, -1],
         },
         {
           id: 'rj45',
-          label: 'RJ45 网口',
+          label: tr('RJ45 网口', 'RJ45 Ethernet'),
           kind: 'rj45',
           localPos: [w * 0.082, y, zRear],
           localDir: [0, 0, -1],
@@ -362,14 +365,14 @@ export function devicePorts(
         },
         {
           id: 'usbc1',
-          label: '雷雳 / USB-C 1',
+          label: 'USB4 / Type-C 1',
           kind: 'usbc',
           localPos: [-w * 0.192, y, zRear],
           localDir: [0, 0, -1],
         },
         {
           id: 'usbc2',
-          label: '雷雳 / USB-C 2',
+          label: 'USB4 / Type-C 2',
           kind: 'usbc',
           localPos: [-w * 0.258, y, zRear],
           localDir: [0, 0, -1],
@@ -383,14 +386,14 @@ export function devicePorts(
     return [
       {
         id: 'power',
-        label: 'AC 电源口',
+        label: tr('AC 电源口', 'AC Power In'),
         kind: 'power',
         localPos: [-w * 0.31, y, zRear],
         localDir: [0, 0, -1],
       },
       {
         id: 'rj45',
-        label: 'RJ45 网口',
+        label: tr('RJ45 网口', 'RJ45 Ethernet'),
         kind: 'rj45',
         localPos: [-w * 0.18, y, zRear],
         localDir: [0, 0, -1],
@@ -404,21 +407,21 @@ export function devicePorts(
       },
       {
         id: 'usbc1',
-        label: '雷雳 / USB-C 1',
+        label: 'USB4 / Type-C 1',
         kind: 'usbc',
         localPos: [w * 0.06, y, zRear],
         localDir: [0, 0, -1],
       },
       {
         id: 'usbc2',
-        label: '雷雳 / USB-C 2',
+        label: 'USB4 / Type-C 2',
         kind: 'usbc',
         localPos: [w * 0.145, y, zRear],
         localDir: [0, 0, -1],
       },
       {
         id: 'audio',
-        label: '3.5mm 音频口',
+        label: tr('3.5mm 音频口', '3.5mm Audio'),
         kind: 'aux35',
         localPos: [w * 0.34, y, zRear],
         localDir: [0, 0, -1],
@@ -432,7 +435,7 @@ export function devicePorts(
       return [
         {
           id: 'speakerIn',
-          label: '副箱音箱接线柱 (±输入)',
+          label: tr('副箱音箱接线柱 (±输入)', 'Passive Binding Posts (±In)'),
           kind: 'speakerWire',
           localPos: [0, h * 0.25, -d / 2],
           localDir: [0, 0, -1],
@@ -443,7 +446,7 @@ export function devicePorts(
     if (cfg.role === 'active') {
       ports.push({
         id: 'speakerOut',
-        label: '主副箱输出 (±接线柱)',
+        label: tr('主副箱输出 (±接线柱)', 'Speaker Out (±Binding Posts)'),
         kind: 'speakerWire',
         localPos: [w * 0.22, h * 0.22, -d / 2],
         localDir: [0, 0, -1],
@@ -452,7 +455,7 @@ export function devicePorts(
     if (spec.hasUsbC) {
       ports.push({
         id: 'usbc',
-        label: 'USB-C DAC 数字音频输入',
+        label: tr('USB-C DAC 数字音频输入', 'USB-C DAC Audio In'),
         kind: 'usbc',
         localPos: [w * 0.22, h * 0.44, -d / 2],
         localDir: [0, 0, -1],
@@ -461,7 +464,9 @@ export function devicePorts(
     if (spec.hasAux35) {
       ports.push({
         id: 'aux35',
-        label: spec.auxOnFront ? '前置 3.5mm AUX 输入' : '3.5mm AUX 音频输入',
+        label: spec.auxOnFront
+          ? tr('前置 3.5mm AUX 输入', 'Front 3.5mm AUX In')
+          : tr('3.5mm AUX 音频输入', '3.5mm AUX Audio In'),
         kind: 'aux35',
         localPos: spec.auxOnFront ? [-w * 0.34, h * 0.095, d / 2] : [w * 0.04, h * 0.36, -d / 2],
         localDir: spec.auxOnFront ? [0, 0, 1] : [0, 0, -1],
@@ -470,7 +475,7 @@ export function devicePorts(
     if (spec.hasRca) {
       ports.push({
         id: 'rca',
-        label: 'RCA 红白莲花输入 (L/R)',
+        label: tr('RCA 红白莲花输入 (L/R)', 'RCA Stereo Input (L/R)'),
         kind: 'rca',
         localPos: [-w * 0.2, h * 0.36, -d / 2],
         localDir: [0, 0, -1],
@@ -479,7 +484,7 @@ export function devicePorts(
     if (spec.hasOptical) {
       ports.push({
         id: 'optical',
-        label: '光纤数字输入 (TOSLINK)',
+        label: tr('光纤数字输入 (TOSLINK)', 'Optical Digital In (TOSLINK)'),
         kind: 'optical',
         localPos: [-w * 0.02, h * 0.47, -d / 2],
         localDir: [0, 0, -1],
@@ -488,7 +493,7 @@ export function devicePorts(
     if (spec.hasTrs635) {
       ports.push({
         id: 'trs635',
-        label: '6.35mm TRS 平衡输入 (L/R)',
+        label: tr('6.35mm TRS 平衡输入 (L/R)', '6.35mm TRS Balanced In (L/R)'),
         kind: 'trs635',
         localPos: [w * 0.16, h * 0.39, -d / 2],
         localDir: [0, 0, -1],
@@ -496,7 +501,10 @@ export function devicePorts(
     }
     ports.push({
       id: 'power',
-      label: cfg.model === 'audioengineA2' ? 'DC 24V 电源输入' : 'AC 电源输入',
+      label:
+        cfg.model === 'audioengineA2'
+          ? tr('DC 24V 电源输入', 'DC 24V Power In')
+          : tr('AC 电源输入', 'AC Power In'),
       kind: 'power',
       localPos: [-w * 0.22, h * 0.14, -d / 2],
       localDir: [0, 0, -1],
@@ -516,7 +524,7 @@ export function devicePorts(
       ...slotPorts,
       {
         id: 'ac-in',
-        label: '插排总电源线',
+        label: tr('插排总电源线', 'Power Strip Cord'),
         kind: 'power',
         localPos: [-w / 2, h * 0.48, 0],
         localDir: [-1, 0, 0],

@@ -1,3 +1,14 @@
+/**
+ * CS50x Final Project — DeskCraft (3D Workspace & Cable Routing Studio)
+ *
+ * Academic Honesty & AI Assistance Disclosure:
+ * Product concept, workspace domain rules (fixed-length non-stretching cable physics,
+ * modular pure-cable vs. optional power-adapter logic, anti-clipping constraints, and
+ * de-branded 1:1 hardware specifications), UX workflow, and iterative visual/functional QA
+ * were conceived, directed, and verified by the author. AI coding assistants (Gemini / Claude)
+ * were used to assist with Three.js procedural geometry math, React/TypeScript implementation,
+ * automated test scaffolding, and bilingual EN/ZH localization.
+ */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import {
@@ -32,15 +43,27 @@ import { uid, type AssetMeta, type Project } from './domain/project';
 import { isOutOfBounds } from './domain/placement';
 import { editorErrorMessage } from './domain/screenLamp';
 import { armLimitMessage } from './domain/monitorArm';
+import { PLUG_SPEC_META } from './domain/power';
 import { inspectModel, disposeModel, type LoadedModel } from './assets/importModel';
 import { registerModel, clearModelCache } from './assets/modelCache';
 import { saveProject, loadProject } from './persistence/projectRepository';
 import { exportProjectFile, importProjectFile } from './persistence/projectFile';
+import { tr, translateObstacleLabel, useI18n } from './i18n';
+
 type Pending = { file: File; model: LoadedModel; format: 'glb' | 'gltf' };
+type SaveStatusKind =
+  'restoring' | 'waiting' | 'paused' | 'unavailable' | 'saving' | 'saved' | 'failed';
+
 function errorText(e: unknown) {
-  return e instanceof Error ? e.message : '操作未完成，请重试。';
+  return e instanceof Error
+    ? e.message
+    : tr('操作未完成，请重试。', 'Operation incomplete. Please try again.');
 }
+
 export default function App() {
+  const { lang, toggleLang } = useI18n();
+  const t = useCallback((zh: string, en: string) => (lang === 'en' ? en : zh), [lang]);
+
   const {
     project,
     past,
@@ -56,7 +79,7 @@ export default function App() {
     dragPreview,
   } = useEditor();
   const [ready, setReady] = useState(false),
-    [saveState, setSaveState] = useState('正在恢复布局'),
+    [saveStatus, setSaveStatus] = useState<SaveStatusKind>('restoring'),
     [warning, setWarning] = useState(''),
     [busy, setBusy] = useState(''),
     [toast, setToast] = useState(''),
@@ -72,11 +95,28 @@ export default function App() {
     autoAllowed = useRef(true),
     loading = useRef(false),
     toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const saveStateLabel =
+    saveStatus === 'restoring'
+      ? t('正在恢复布局', 'Restoring layout')
+      : saveStatus === 'waiting'
+        ? t('等待保存', 'Pending save')
+        : saveStatus === 'paused'
+          ? t('自动保存已暂停', 'Auto-save paused')
+          : saveStatus === 'unavailable'
+            ? t('自动保存不可用', 'Auto-save unavailable')
+            : saveStatus === 'saving'
+              ? t('正在保存', 'Saving')
+              : saveStatus === 'saved'
+                ? t('已保存到此浏览器', 'Saved in browser')
+                : t('保存失败', 'Save failed');
+
   const notify = useCallback((text: string) => {
     setToast(text);
     if (toastTimer.current) clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(''), 6500);
   }, []);
+
   useEffect(() => {
     if (loading.current) return;
     loading.current = true;
@@ -85,50 +125,66 @@ export default function App() {
         if (result) {
           useEditor.getState().replace(result.project, result.blobs);
           if (result.blobs.size < result.project.assets.length) {
-            setWarning('部分本地模型资源缺失，已保留物品占位。请导入备份工程恢复。');
+            setWarning(
+              tr(
+                '部分本地模型资源缺失，已保留物品占位。请导入备份工程恢复。',
+                'Some local 3D model blobs are missing; placeholders kept. Import a backup file to restore.',
+              ),
+            );
             autoAllowed.current = false;
           }
         }
-        setSaveState(autoAllowed.current ? '等待保存' : '自动保存已暂停');
+        setSaveStatus(autoAllowed.current ? 'waiting' : 'paused');
       })
       .catch((e) => {
         autoAllowed.current = false;
         setWarning(
-          `恢复失败：${errorText(e)}。当前默认布局不会自动覆盖旧工程，可先导出备份再新建。`,
+          tr(
+            `恢复失败：${errorText(e)}。当前默认布局不会自动覆盖旧工程，可先导出备份再新建。`,
+            `Restore failed: ${errorText(e)}. Default layout will not overwrite previous data.`,
+          ),
         );
-        setSaveState('自动保存不可用');
+        setSaveStatus('unavailable');
       })
       .finally(() => setReady(true));
     return () => {
       if (toastTimer.current) clearTimeout(toastTimer.current);
     };
   }, []);
+
   const persist = useCallback((p: Project, blobs: Map<string, Blob>) => {
-    setSaveState('正在保存');
+    setSaveStatus('saving');
     saveQueue.current = saveQueue.current
       .catch(() => {})
       .then(() => saveProject(p, blobs))
       .then(() => {
         if (useEditor.getState().project === p) {
-          setSaveState('已保存到此浏览器');
+          setSaveStatus('saved');
           setWarning('');
         }
       })
       .catch((e) => {
-        setSaveState('保存失败');
-        setWarning(`本地保存失败：${errorText(e)}。请下载工程备份，当前布局仍保留在页面中。`);
+        setSaveStatus('failed');
+        setWarning(
+          tr(
+            `本地保存失败：${errorText(e)}。请下载工程备份，当前布局仍保留在页面中。`,
+            `Local save failed: ${errorText(e)}. Download a project backup; current layout remains open.`,
+          ),
+        );
       });
     return saveQueue.current;
   }, []);
+
   useEffect(() => {
     if (!ready || !autoAllowed.current) return;
-    setSaveState('等待保存');
+    setSaveStatus('waiting');
     const timer = setTimeout(() => {
       const s = useEditor.getState();
       void persist(s.project, s.blobs);
     }, 500);
     return () => clearTimeout(timer);
   }, [project, ready, persist]);
+
   useEffect(() => {
     function key(e: KeyboardEvent) {
       if (busy || pending || help) return;
@@ -158,25 +214,41 @@ export default function App() {
           setPanel(null);
         }
       } catch (error) {
-        notify(editorErrorMessage(error, '场景已达到模型预算，请先移除部分物品。'));
+        notify(
+          editorErrorMessage(
+            error,
+            tr(
+              '场景已达到模型预算，请先移除部分物品。',
+              'Scene triangle budget reached. Remove some items first.',
+            ),
+          ),
+        );
       }
     }
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
   }, [busy, pending, help, notify]);
+
   function changeView(kind: View['kind']) {
     setView((v) => ({ kind, nonce: v.nonce + 1 }));
   }
+
   async function readModel(file?: File) {
     if (!file) return;
-    setBusy('正在检查模型…');
+    setBusy(t('正在检查模型…', 'Inspecting 3D model…'));
     try {
       const format = file.name.toLowerCase().endsWith('.glb')
         ? 'glb'
         : file.name.toLowerCase().endsWith('.gltf')
           ? 'gltf'
           : null;
-      if (!format) throw new Error('请选择 .glb 或自包含 .gltf 文件。');
+      if (!format)
+        throw new Error(
+          t(
+            '请选择 .glb 或自包含 .gltf 文件。',
+            'Please select a .glb or self-contained .gltf file.',
+          ),
+        );
       const model = await inspectModel(file, format);
       setPending({ file, model, format });
       setLongest(30);
@@ -186,12 +258,14 @@ export default function App() {
       setBusy('');
     }
   }
+
   const closeImport = useCallback(() => {
     setPending((p) => {
       if (p) disposeModel(p.model);
       return null;
     });
   }, []);
+
   function acceptImport() {
     if (!pending) return;
     try {
@@ -212,13 +286,19 @@ export default function App() {
       useEditor.getState().addImported(meta, file, size);
       registerModel(meta.id, model);
       setPending(null);
-      notify('模型已添加到桌面，可在右侧继续调整。');
+      notify(
+        t(
+          '模型已添加到桌面，可在右侧继续调整。',
+          'Model added to desk. Adjust details in the right panel.',
+        ),
+      );
     } catch (e) {
-      notify(`无法添加模型：${errorText(e)}`);
+      notify(`${t('无法添加模型：', 'Cannot add model: ')}${errorText(e)}`);
     }
   }
+
   async function download() {
-    setBusy('正在打包工程…');
+    setBusy(t('正在打包工程…', 'Packaging project…'));
     try {
       const s = useEditor.getState(),
         blob = await exportProjectFile(s.project, s.blobs),
@@ -228,18 +308,31 @@ export default function App() {
       link.download = `${s.project.name.replace(/[<>:"/\\|?*]/g, '_')}.desksetup.json`;
       link.click();
       setTimeout(() => URL.revokeObjectURL(url), 10000);
-      notify('工程已下载，包含当前布局和自定义模型。');
+      notify(
+        t(
+          '工程已下载，包含当前布局和自定义模型。',
+          'Project downloaded with layout and custom models.',
+        ),
+      );
     } catch (e) {
       notify(errorText(e));
     } finally {
       setBusy('');
     }
   }
+
   async function readProject(file?: File) {
     if (!file) return;
-    if (!window.confirm('导入工程会替换当前布局。需要保留时，请先取消并导出当前工程。继续导入？'))
+    if (
+      !window.confirm(
+        t(
+          '导入工程会替换当前布局。需要保留时，请先取消并导出当前工程。继续导入？',
+          'Importing a project replaces your current layout. Export first if you want to keep it. Continue?',
+        ),
+      )
+    )
       return;
-    setBusy('正在校验工程与模型…');
+    setBusy(t('正在校验工程与模型…', 'Validating project & models…'));
     try {
       const result = await importProjectFile(file);
       flushSync(() => setSceneVisible(false));
@@ -249,15 +342,26 @@ export default function App() {
       useEditor.getState().replace(result.project, result.blobs);
       setSceneVisible(true);
       setWarning('');
-      notify('工程已恢复，欢迎回到桌构工作台。');
+      notify(t('工程已恢复，欢迎回到桌构工作台。', 'Project restored. Welcome back to DeskCraft.'));
     } catch (e) {
-      notify(`工程未导入，原布局已保留：${errorText(e)}`);
+      notify(
+        `${t('工程未导入，原布局已保留：', 'Import cancelled, existing layout kept: ')}${errorText(e)}`,
+      );
     } finally {
       setBusy('');
     }
   }
+
   function reset() {
-    if (!window.confirm('新建会替换当前布局。需要保留时，请先取消并导出工程。确定新建？')) return;
+    if (
+      !window.confirm(
+        t(
+          '新建会替换当前布局。需要保留时，请先取消并导出工程。确定新建？',
+          'Creating a new setup replaces your current layout. Export first if needed. Continue?',
+        ),
+      )
+    )
+      return;
     flushSync(() => setSceneVisible(false));
     clearModelCache();
     autoAllowed.current = true;
@@ -265,9 +369,11 @@ export default function App() {
     useEditor.getState().replace(defaultProject(), new Map());
     setSceneVisible(true);
     changeView('fit');
-    notify('已新建默认桌搭。');
+    notify(t('已新建默认桌搭。', 'Reset to default desk setup.'));
   }
+
   const outside = project.items.filter((i) => isOutOfBounds(i, project.desk, project.items)).length;
+
   return (
     <div className={`app-shell ${panel ? 'show-' + panel : ''}`} aria-busy={!!busy || !ready}>
       <header className="app-header">
@@ -278,18 +384,16 @@ export default function App() {
             <span />
           </div>
           <div>
-            <strong>
-              桌构<span>DeskCraft</span>
-            </strong>
-            <small>给理想生活，留一张桌子</small>
+            <strong className={lang === 'en' ? 'brand-en' : ''}>{t('桌构', 'DeskCraft')}</strong>
+            <small>{t('给理想生活，留一张桌子', 'Design Your Ideal Workspace')}</small>
           </div>
         </div>
         <div className="header-divider" />
         <div className="project-name">
-          <span>工作台</span>
+          <span>{t('工作台', 'Project')}</span>
           <label>
             <input
-              aria-label="工程名称"
+              aria-label={t('工程名称', 'Project Name')}
               key={`${project.id}:${project.name}`}
               defaultValue={project.name}
               maxLength={80}
@@ -308,8 +412,8 @@ export default function App() {
         <div className="history-tools">
           <button
             className="icon-button"
-            title="撤销 Ctrl+Z"
-            aria-label="撤销"
+            title={t('撤销 Ctrl+Z', 'Undo Ctrl+Z')}
+            aria-label={t('撤销', 'Undo')}
             disabled={!past.length}
             onClick={() => useEditor.getState().undo()}
           >
@@ -317,8 +421,8 @@ export default function App() {
           </button>
           <button
             className="icon-button"
-            title="重做 Ctrl+Shift+Z"
-            aria-label="重做"
+            title={t('重做 Ctrl+Shift+Z', 'Redo Ctrl+Shift+Z')}
+            aria-label={t('重做', 'Redo')}
             disabled={!future.length}
             onClick={() => useEditor.getState().redo()}
           >
@@ -326,40 +430,55 @@ export default function App() {
           </button>
         </div>
         <div className="header-actions">
+          <button
+            type="button"
+            className="lang-toggle"
+            role="switch"
+            aria-checked={lang === 'en'}
+            aria-label={t('切换语言为英文', 'Switch language to Chinese')}
+            title={t('切换中英文', 'Toggle Chinese / English')}
+            onClick={toggleLang}
+          >
+            <span className={lang === 'zh' ? 'active' : ''}>中文</span>
+            <span className={lang === 'en' ? 'active' : ''}>EN</span>
+          </button>
           <span
             className={`save-status ${warning ? 'save-error' : ''}`}
-            title="本地保存绑定当前浏览器；下载工程才能跨设备备份。"
+            title={t(
+              '本地保存绑定当前浏览器；下载工程才能跨设备备份。',
+              'Saved in this browser only; export project file for cross-device backup.',
+            )}
           >
             {warning ? (
               <TriangleAlert size={13} />
-            ) : saveState.includes('保存到') ? (
+            ) : saveStatus === 'saved' ? (
               <Check size={14} />
             ) : (
               <HardDrive size={13} />
             )}
-            <span>{saveState}</span>
+            <span>{saveStateLabel}</span>
           </span>
           <button className="quiet-button new-button" onClick={reset} disabled={!ready}>
             <Plus size={16} />
-            新建
+            {t('新建', 'New')}
           </button>
           <button
             className="quiet-button"
-            aria-label="打开工程"
+            aria-label={t('打开工程', 'Open Project')}
             onClick={() => projectInput.current?.click()}
             disabled={!ready}
           >
             <ArrowUpFromLine size={15} />
-            <span>打开工程</span>
+            <span>{t('打开工程', 'Open')}</span>
           </button>
           <button
             className="primary-button"
-            aria-label="导出工程"
+            aria-label={t('导出工程', 'Export Project')}
             onClick={download}
             disabled={!ready}
           >
             <ArrowDownToLine size={15} />
-            <span>导出工程</span>
+            <span>{t('导出工程', 'Export')}</span>
           </button>
         </div>
       </header>
@@ -369,38 +488,47 @@ export default function App() {
           aria-expanded={panel === 'library'}
         >
           <PanelLeft size={16} />
-          模型库
+          {t('模型库', 'Library')}
         </button>
-        <span>三维桌搭工作台</span>
+        <span>{t('三维桌搭工作台', '3D Workspace Studio')}</span>
         <button
           onClick={() => setPanel(panel === 'inspector' ? null : 'inspector')}
           aria-expanded={panel === 'inspector'}
         >
           <SlidersHorizontal size={16} />
-          属性
+          {t('属性', 'Inspector')}
         </button>
       </div>
       <main className="editor-layout">
         <ModelLibrary onImport={() => modelInput.current?.click()} onError={notify} />
-        <section className="workspace" aria-label="三维桌搭预览">
+        <section className="workspace" aria-label={t('三维桌搭预览', '3D Desk Preview')}>
           <div className="viewport-heading">
             <div>
               <span className="workspace-dot" />
-              <strong>自由搭建</strong>
+              <strong>{t('自由搭建', 'Free Build')}</strong>
               <span className="viewport-separator">/</span>
               <span>
-                {view.kind === 'top' ? '俯视视角' : view.kind === 'front' ? '正面视角' : '透视视角'}
+                {view.kind === 'top'
+                  ? t('俯视视角', 'Top View')
+                  : view.kind === 'front'
+                    ? t('正面视角', 'Front View')
+                    : t('透视视角', 'Perspective')}
               </span>
             </div>
             <span className="grid-scale">
-              <span className="grid-icon" />1 格 = 10 cm
+              <span className="grid-icon" />
+              {t('1 格 = 10 cm', '1 Grid = 10 cm')}
             </span>
           </div>
-          <div className="environment-controls" role="group" aria-label="照明环境">
+          <div
+            className="environment-controls"
+            role="group"
+            aria-label={t('照明环境', 'Lighting Environment')}
+          >
             {(
               [
-                { value: 'bright', label: '明亮' },
-                { value: 'dark', label: '暗室' },
+                { value: 'bright', label: t('明亮', 'Bright') },
+                { value: 'dark', label: t('暗室', 'Dark') },
               ] as const
             ).map(({ value, label }) => (
               <button
@@ -420,26 +548,76 @@ export default function App() {
           </div>
           {sceneVisible && <DeskScene view={view} onError={notify} />}
           {wiringMode && (
-            <div className="arm-limit-pill arm-elbow-pill" role="status">
+            <div
+              className="arm-limit-pill arm-elbow-pill"
+              role="status"
+              style={{
+                maxWidth: 'calc(100% - 32px)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
               <span>
-                {`3D 连线中${wiringPreset?.label ? `（${wiringPreset.label}）${wiringPreset.lengthM ? ` · ${wiringPreset.lengthM}m` : ''}` : ''} · 手持${wiringActiveEnd === 'from' ? ' A 端' : ' B 端'}${
-                  wiringPreset?.fromPortKind &&
-                  wiringPreset?.toPortKind &&
-                  wiringPreset.fromPortKind !== wiringPreset.toPortKind
-                    ? `(${(wiringActiveEnd === 'from' ? wiringPreset.fromPortKind : wiringPreset.toPortKind) === 'dp' ? 'DP接头' : 'Type-C接头'})`
-                    : ''
-                }：${
-                  wiringDraft
-                    ? '点击目标绿色端口完成连接或落至桌下'
-                    : '点击设备绿色端口先接此端（按空格切换另一端）'
-                }${wiringShortfallM > 0.01 ? ` · 线长不足差 ${wiringShortfallM.toFixed(2)}m` : ''}`}
+                {(() => {
+                  const hasAsymEnds = Boolean(
+                    wiringPreset?.fromPortKind &&
+                    wiringPreset?.toPortKind &&
+                    wiringPreset.fromPortKind !== wiringPreset.toPortKind,
+                  );
+                  const draftItem = wiringDraft
+                    ? project.items.find((it) => it.id === wiringDraft.itemId)
+                    : undefined;
+                  const draftIsOutletSlot = Boolean(
+                    wiringDraft &&
+                    (draftItem?.kind === 'powerStrip' || draftItem?.kind === 'wallOutlet') &&
+                    wiringDraft.portId.startsWith('slot-'),
+                  );
+                  const heldPlug = draftItem
+                    ? draftIsOutletSlot
+                      ? wiringPreset?.devicePlugType
+                      : wiringPreset?.outletPlugType
+                    : wiringActiveEnd === 'from'
+                      ? wiringPreset?.devicePlugType
+                      : wiringPreset?.outletPlugType;
+                  const heldPortKind = draftItem
+                    ? draftIsOutletSlot
+                      ? wiringPreset?.fromPortKind
+                      : wiringPreset?.toPortKind
+                    : wiringActiveEnd === 'from'
+                      ? wiringPreset?.fromPortKind
+                      : wiringPreset?.toPortKind;
+                  const heldDesc = heldPlug
+                    ? PLUG_SPEC_META[heldPlug].shortLabel
+                    : heldPortKind === 'dp'
+                      ? lang === 'en'
+                        ? 'DP Plug'
+                        : 'DP接头'
+                      : heldPortKind === 'magsafe'
+                        ? lang === 'en'
+                          ? 'Magnetic Plug'
+                          : '磁吸接头'
+                        : lang === 'en'
+                          ? 'Type-C Plug'
+                          : 'Type-C接头';
+                  return lang === 'en'
+                    ? `3D Wiring${wiringPreset?.label ? ` (${wiringPreset.label}${wiringPreset.lengthM ? ` · ${wiringPreset.lengthM}m` : ''})` : ''} · Holding End ${wiringActiveEnd === 'from' ? 'A' : 'B'}${hasAsymEnds ? ` (${heldDesc})` : ''}: ${
+                        wiringDraft
+                          ? 'Click a green target port to finish or drop under desk'
+                          : 'Click a green port to attach this end (Space to flip)'
+                      }${wiringShortfallM > 0.01 ? ` · Short by ${wiringShortfallM.toFixed(2)}m` : ''}`
+                    : `3D 连线中${wiringPreset?.label ? `（${wiringPreset.label}）${wiringPreset.lengthM ? ` · ${wiringPreset.lengthM}m` : ''}` : ''} · 手持${wiringActiveEnd === 'from' ? ' A 端' : ' B 端'}${hasAsymEnds ? `(${heldDesc})` : ''}：${
+                        wiringDraft
+                          ? '点击目标绿色端口完成连接或落至桌下'
+                          : '点击设备绿色端口先接此端（按空格切换另一端）'
+                      }${wiringShortfallM > 0.01 ? ` · 线长不足差 ${wiringShortfallM.toFixed(2)}m` : ''}`;
+                })()}
               </span>
               <button
                 type="button"
                 style={{ pointerEvents: 'auto', marginLeft: 8, padding: '2px 8px', fontSize: 12 }}
                 onClick={() => useEditor.getState().switchWiringEnd()}
               >
-                切换另一端 (Space)
+                {t('切换另一端 (Space)', 'Flip End (Space)')}
               </button>
               {wiringDraft && (
                 <button
@@ -447,7 +625,7 @@ export default function App() {
                   style={{ pointerEvents: 'auto', marginLeft: 8, padding: '2px 8px', fontSize: 12 }}
                   onClick={() => useEditor.getState().dropWiringDraftToFloor('auto')}
                 >
-                  落至桌下走线
+                  {t('落至桌下走线', 'Drop Under Desk')}
                 </button>
               )}
               <button
@@ -455,59 +633,81 @@ export default function App() {
                 style={{ pointerEvents: 'auto', marginLeft: 8, padding: '2px 8px', fontSize: 12 }}
                 onClick={() => useEditor.getState().setWiringMode(false)}
               >
-                取消
+                {t('取消', 'Cancel')}
               </button>
             </div>
           )}
-          {!wiringMode && collisionNotice && (
-            <div className="arm-limit-pill arm-elbow-pill" role="status">
+          {collisionNotice && (
+            <div
+              className="arm-limit-pill arm-elbow-pill"
+              role="alert"
+              style={
+                wiringMode
+                  ? {
+                      top: 108,
+                      zIndex: 7,
+                      background: 'rgba(185, 28, 28, 0.95)',
+                      borderColor: 'rgba(248, 113, 113, 0.55)',
+                      color: '#fff',
+                    }
+                  : undefined
+              }
+            >
+              <TriangleAlert size={14} style={{ flexShrink: 0, marginRight: 6 }} />
               <span>{collisionNotice}</span>
             </div>
           )}
           <div className="workspace-label">
-            <span>为你的日常，找到更好的位置。</span>
-            <small>真实尺寸 · 自由组合</small>
+            <span>
+              {t('为你的日常，找到更好的位置。', 'Find a better place for your everyday gear.')}
+            </span>
+            <small>{t('真实尺寸 · 自由组合', 'True-to-Scale · Modular Layout')}</small>
           </div>
-          <div className="view-controls" aria-label="视角切换">
+          <div className="view-controls" aria-label={t('视角切换', 'Camera Views')}>
             <button
               className={view.kind === 'perspective' || view.kind === 'fit' ? 'active' : ''}
               onClick={() => changeView('perspective')}
             >
               <Box size={16} />
-              透视
+              {t('透视', '3D')}
             </button>
             <button
               className={view.kind === 'top' ? 'active' : ''}
               onClick={() => changeView('top')}
             >
               <LayersIcon />
-              俯视
+              {t('俯视', 'Top')}
             </button>
             <button
               className={view.kind === 'front' ? 'active' : ''}
               onClick={() => changeView('front')}
             >
               <Move3D size={16} />
-              正视
+              {t('正视', 'Front')}
             </button>
             <span />
-            <button title="适配桌面" aria-label="适配桌面" onClick={() => changeView('fit')}>
+            <button
+              title={t('适配桌面', 'Fit to Desk')}
+              aria-label={t('适配桌面', 'Fit to Desk')}
+              onClick={() => changeView('fit')}
+            >
               <Scan size={17} />
             </button>
             <button
               className={wiringMode ? 'active' : ''}
-              title="3D 点选端口手动连线"
-              aria-label="3D 手动连线"
+              title={t('3D 点选端口手动连线', '3D Interactive Port Wiring')}
+              aria-label={t('3D 手动连线', '3D Manual Wiring')}
               aria-pressed={wiringMode}
               onClick={() => useEditor.getState().setWiringMode(!wiringMode)}
             >
               <CableIcon size={16} />
-              连线
+              {t('连线', 'Wire')}
             </button>
           </div>
           <div className="viewport-bottom">
             <div>
-              <span className="tiny-dot" /> {project.items.length} 件物品
+              <span className="tiny-dot" />{' '}
+              {lang === 'en' ? `${project.items.length} items` : `${project.items.length} 件物品`}
               {outside > 0 && (
                 <button
                   className="outbound-count"
@@ -519,11 +719,15 @@ export default function App() {
                   }}
                 >
                   <TriangleAlert size={12} />
-                  {outside} 件超出桌面
+                  {lang === 'en' ? `${outside} out of bounds` : `${outside} 件超出桌面`}
                 </button>
               )}
             </div>
-            <button className="help-button" onClick={() => setHelp(!help)} aria-label="操作帮助">
+            <button
+              className="help-button"
+              onClick={() => setHelp(!help)}
+              aria-label={t('操作帮助', 'Controls Help')}
+            >
               <CircleHelp size={18} />
             </button>
           </div>
@@ -549,10 +753,17 @@ export default function App() {
           {dragPreview?.kind === 'rotation' && (
             <div className="arm-limit-pill arm-elbow-pill" role="status">
               <span>
-                旋转角度 {Math.round(dragPreview.rotation * 10) / 10}° ·{' '}
-                {dragPreview.hitObstacle
-                  ? `已触碰${dragPreview.hitObstacle}（防穿模限制）`
-                  : '自由旋转中（Esc 取消）'}
+                {lang === 'en'
+                  ? `Rotation ${Math.round(dragPreview.rotation * 10) / 10}° · ${
+                      dragPreview.hitObstacle
+                        ? `Blocked by ${translateObstacleLabel(dragPreview.hitObstacle, 'en')}`
+                        : 'Rotating (Esc to cancel)'
+                    }`
+                  : `旋转角度 ${Math.round(dragPreview.rotation * 10) / 10}° · ${
+                      dragPreview.hitObstacle
+                        ? `已触碰${dragPreview.hitObstacle}（防穿模限制）`
+                        : '自由旋转中（Esc 取消）'
+                    }`}
               </span>
             </div>
           )}
@@ -560,18 +771,32 @@ export default function App() {
             <div className="arm-limit-pill arm-elbow-pill" role="status">
               <span>
                 {dragPreview.axis === 'pitch'
-                  ? `俯仰角度 ${Math.round(dragPreview.value * 10) / 10}° · ${
-                      dragPreview.hitObstacle
-                        ? `已触碰${dragPreview.hitObstacle}（防穿模限制）`
-                        : '俯仰调节中（Esc 取消）'
-                    }`
-                  : dragPreview.axis === 'roll'
-                    ? `屏幕翻转 ${Math.round(dragPreview.value * 10) / 10}° · ${
+                  ? lang === 'en'
+                    ? `Tilt ${Math.round(dragPreview.value * 10) / 10}° · ${
+                        dragPreview.hitObstacle
+                          ? `Blocked by ${translateObstacleLabel(dragPreview.hitObstacle, 'en')}`
+                          : 'Adjusting tilt (Esc to cancel)'
+                      }`
+                    : `俯仰角度 ${Math.round(dragPreview.value * 10) / 10}° · ${
                         dragPreview.hitObstacle
                           ? `已触碰${dragPreview.hitObstacle}（防穿模限制）`
-                          : '翻转调节中（Esc 取消）'
+                          : '俯仰调节中（Esc 取消）'
                       }`
-                    : `屏幕开合角 ${Math.round(dragPreview.value * 10) / 10}° · 开合调节中（Esc 取消）`}
+                  : dragPreview.axis === 'roll'
+                    ? lang === 'en'
+                      ? `Pivot ${Math.round(dragPreview.value * 10) / 10}° · ${
+                          dragPreview.hitObstacle
+                            ? `Blocked by ${translateObstacleLabel(dragPreview.hitObstacle, 'en')}`
+                            : 'Adjusting pivot (Esc to cancel)'
+                        }`
+                      : `屏幕翻转 ${Math.round(dragPreview.value * 10) / 10}° · ${
+                          dragPreview.hitObstacle
+                            ? `已触碰${dragPreview.hitObstacle}（防穿模限制）`
+                            : '翻转调节中（Esc 取消）'
+                        }`
+                    : lang === 'en'
+                      ? `Lid Angle ${Math.round(dragPreview.value * 10) / 10}° · Adjusting (Esc to cancel)`
+                      : `屏幕开合角 ${Math.round(dragPreview.value * 10) / 10}° · 开合调节中（Esc 取消）`}
               </span>
             </div>
           )}
@@ -581,55 +806,63 @@ export default function App() {
               <div className="arm-limit-pill arm-elbow-pill" role="status">
                 <span>
                   {project.items.find((i) => i.id === dragPreview.id)?.kind === 'wallOutlet'
-                    ? `离地高度 ${Math.round(dragPreview.wallY * 100)} cm`
-                    : `墙面挂高 ${Math.round(dragPreview.wallY * 100)} cm`}{' '}
-                  · 沿墙面拖动调节（Esc 取消）
+                    ? lang === 'en'
+                      ? `Height ${Math.round(dragPreview.wallY * 100)} cm above floor`
+                      : `离地高度 ${Math.round(dragPreview.wallY * 100)} cm`
+                    : lang === 'en'
+                      ? `Mount height ${Math.round(dragPreview.wallY * 100)} cm`
+                      : `墙面挂高 ${Math.round(dragPreview.wallY * 100)} cm`}{' '}
+                  · {t('沿墙面拖动调节（Esc 取消）', 'Drag along wall (Esc to cancel)')}
                 </span>
               </div>
             )}
           {dragPreview?.kind === 'armElbow' && !dragPreview.limitReason && (
             <div className="arm-limit-pill arm-elbow-pill" role="status">
               <span>
-                {dragPreview.role === 'primary' ? '主臂' : '副臂'}肘关节水平摆角{' '}
-                {Math.round(dragPreview.yawDeg)}° · 水平调节中（Esc 取消）
+                {lang === 'en'
+                  ? `${dragPreview.role === 'primary' ? 'Primary' : 'Secondary'} Elbow Yaw ${Math.round(dragPreview.yawDeg)}° (Esc to cancel)`
+                  : `${dragPreview.role === 'primary' ? '主臂' : '副臂'}肘关节水平摆角 ${Math.round(dragPreview.yawDeg)}° · 水平调节中（Esc 取消）`}
               </span>
             </div>
           )}
           {dragPreview?.kind === 'armLowerPitch' && !dragPreview.limitReason && (
             <div className="arm-limit-pill arm-elbow-pill" role="status">
               <span>
-                {dragPreview.role === 'primary' ? '主臂' : '副臂'}下长臂俯仰{' '}
-                {dragPreview.lowerPitchDeg.toFixed(1)}° · 定长 27.5 cm 上下调节中（Esc 取消）
+                {lang === 'en'
+                  ? `${dragPreview.role === 'primary' ? 'Primary' : 'Secondary'} Lower Arm Pitch ${dragPreview.lowerPitchDeg.toFixed(1)}° · Fixed 27.5 cm (Esc to cancel)`
+                  : `${dragPreview.role === 'primary' ? '主臂' : '副臂'}下长臂俯仰 ${dragPreview.lowerPitchDeg.toFixed(1)}° · 定长 27.5 cm 上下调节中（Esc 取消）`}
               </span>
             </div>
           )}
           {dragPreview?.kind === 'armUpperPitch' && !dragPreview.limitReason && (
             <div className="arm-limit-pill arm-elbow-pill" role="status">
               <span>
-                {dragPreview.role === 'primary' ? '主臂' : '副臂'}气压上臂俯仰{' '}
-                {dragPreview.upperPitchDeg.toFixed(1)}° · 定长 30.5 cm 升降调节中（Esc 取消）
+                {lang === 'en'
+                  ? `${dragPreview.role === 'primary' ? 'Primary' : 'Secondary'} Upper Arm Pitch ${dragPreview.upperPitchDeg.toFixed(1)}° · Fixed 30.5 cm (Esc to cancel)`
+                  : `${dragPreview.role === 'primary' ? '主臂' : '副臂'}气压上臂俯仰 ${dragPreview.upperPitchDeg.toFixed(1)}° · 定长 30.5 cm 升降调节中（Esc 取消）`}
               </span>
             </div>
           )}
           {dragPreview?.kind === 'armBase' && !dragPreview.limitReason && (
             <div className="arm-limit-pill arm-elbow-pill" role="status">
               <span>
-                支架底座（
+                {t('支架底座（', 'Arm Base (')}
                 {dragPreview.clampEdge === 'back'
-                  ? '后桌缘'
+                  ? t('后桌缘', 'Back Edge')
                   : dragPreview.clampEdge === 'left'
-                    ? '左桌缘'
+                    ? t('左桌缘', 'Left Edge')
                     : dragPreview.clampEdge === 'right'
-                      ? '右桌缘'
-                      : '桌面穿孔固定'}
-                ）· X {(dragPreview.clampX * 100).toFixed(1)} cm / Z{' '}
-                {(dragPreview.clampZ * 100).toFixed(1)} cm（Esc 取消）
+                      ? t('右桌缘', 'Right Edge')
+                      : t('桌面穿孔固定', 'Grommet Mount')}
+                {t('）· X ', ') · X ')}
+                {(dragPreview.clampX * 100).toFixed(1)} cm / Z{' '}
+                {(dragPreview.clampZ * 100).toFixed(1)} {t('cm（Esc 取消）', 'cm (Esc to cancel)')}
               </span>
             </div>
           )}
           {(selected || selectedCableId) && (
             <button className="back-to-desk" onClick={() => useEditor.getState().select(null)}>
-              编辑桌子
+              {t('编辑桌子', 'Edit Desk')}
               <ChevronDown size={13} />
             </button>
           )}
@@ -639,14 +872,20 @@ export default function App() {
       <footer className="app-footer">
         <span>
           <MousePointer2 size={13} />
-          右键唤醒选中物品 · 选中后左键拖拽移动与旋转
+          {t(
+            '右键唤醒选中物品 · 选中后左键拖拽移动与旋转',
+            'Right-click to select item · Left-drag selected item to move & rotate',
+          )}
         </span>
         <span>
           <Rotate3D size={14} />
-          左键空白/未选物品旋转视角 · 中键或空白右键平移 · 滚轮缩放
+          {t(
+            '左键空白/未选物品旋转视角 · 中键或空白右键平移 · 滚轮缩放',
+            'Left-drag empty space to orbit · Middle/right-drag to pan · Scroll to zoom',
+          )}
         </span>
         <span className="footer-right">
-          你的灵感，只保存在本地
+          {t('你的灵感，只保存在本地', 'Stored locally in your browser')}
           <ShieldIcon />
         </span>
       </footer>
@@ -654,31 +893,49 @@ export default function App() {
         <div className="persistent-warning" role="alert">
           <TriangleAlert size={18} />
           <span>{warning}</span>
-          <button onClick={download}>下载备份</button>
+          <button onClick={download}>{t('下载备份', 'Download Backup')}</button>
         </div>
       )}
       {toast && (
         <div className="toast" role="status">
           <span>{toast}</span>
-          <button onClick={() => setToast('')} aria-label="关闭提示">
+          <button onClick={() => setToast('')} aria-label={t('关闭提示', 'Dismiss')}>
             <X size={16} />
           </button>
         </div>
       )}
       {help && (
-        <div className="help-popover" role="dialog" aria-label="操作帮助">
+        <div className="help-popover" role="dialog" aria-label={t('操作帮助', 'Controls Help')}>
           <div>
-            <h3>像整理桌面一样简单</h3>
-            <button onClick={() => setHelp(false)} aria-label="关闭帮助">
+            <h3>{t('像整理桌面一样简单', 'Intuitive 3D Desk Planning')}</h3>
+            <button onClick={() => setHelp(false)} aria-label={t('关闭帮助', 'Close Help')}>
               <X size={16} />
             </button>
           </div>
           <p>
-            未选中物品时，左键在任意位置拖拽均可旋转三维视角（不会误触物体）；右键点击物体唤醒并选中后，即可使用左键直接拖拽移动、点击/拖拽旋钮旋转或微调线缆节点；中键或空白处右键平移，滚轮缩放。
+            {t(
+              '未选中物品时，左键在任意位置拖拽均可旋转三维视角（不会误触物体）；右键点击物体唤醒并选中后，即可使用左键直接拖拽移动、点击/拖拽旋钮旋转或微调线缆节点；中键或空白处右键平移，滚轮缩放。',
+              'When nothing is selected, left-drag anywhere to orbit the camera without accidentally moving items. Right-click an item to select it, then left-drag to move, use gizmos to rotate, or drag cable waypoints. Middle/right-drag empty space to pan, scroll to zoom.',
+            )}
           </p>
-          <p>Ctrl / ⌘ + Z 撤销，Shift + Z 重做；Ctrl / ⌘ + D 复制，Delete 删除。Esc 取消拖动。</p>
-          <p>已启用模型与线缆物理防穿模约束，支持穿桌面与显示器底座走线孔及节点微调。</p>
-          <p>本地保存不是云备份。清理站点数据会删除布局，请定期导出工程。</p>
+          <p>
+            {t(
+              'Ctrl / ⌘ + Z 撤销，Shift + Z 重做；Ctrl / ⌘ + D 复制，Delete 删除。Esc 取消拖动。',
+              'Ctrl / ⌘ + Z to undo, Shift + Z to redo; Ctrl / ⌘ + D to duplicate, Delete to remove, Esc to cancel drag.',
+            )}
+          </p>
+          <p>
+            {t(
+              '已启用模型与线缆物理防穿模约束，支持穿桌面与显示器底座走线孔及节点微调。',
+              'Physical collision avoidance and fixed-length cable routing are active, supporting desk grommets and stand cable slots.',
+            )}
+          </p>
+          <p>
+            {t(
+              '本地保存不是云备份。清理站点数据会删除布局，请定期导出工程。',
+              'Browser storage is not cloud backup. Export your project regularly before clearing site data.',
+            )}
+          </p>
         </div>
       )}
       {pending && (
@@ -694,14 +951,14 @@ export default function App() {
       {(busy || !ready) && (
         <div className="busy-shade" role="status">
           <LoaderCircle className="spin" size={24} />
-          <span>{busy || '正在打开你的工作台…'}</span>
+          <span>{busy || t('正在打开你的工作台…', 'Opening your workspace…')}</span>
         </div>
       )}
       <input
         ref={modelInput}
         type="file"
         accept=".glb,.gltf"
-        aria-label="导入模型文件"
+        aria-label={t('导入模型文件', 'Import 3D Model File')}
         className="visually-hidden"
         tabIndex={-1}
         onChange={(e) => {
@@ -713,7 +970,7 @@ export default function App() {
         ref={projectInput}
         type="file"
         accept=".json,.desksetup.json"
-        aria-label="导入工程文件"
+        aria-label={t('导入工程文件', 'Import Project File')}
         className="visually-hidden"
         tabIndex={-1}
         onChange={(e) => {
@@ -724,6 +981,7 @@ export default function App() {
     </div>
   );
 }
+
 function LayersIcon() {
   return (
     <svg
@@ -739,6 +997,7 @@ function LayersIcon() {
     </svg>
   );
 }
+
 function ShieldIcon() {
   return (
     <svg

@@ -1,3 +1,5 @@
+// CS50x Final Project — DeskCraft
+// AI Assistance Disclosure: Developed under the author's design & domain rules with assistance from AI coding tools (see src/App.tsx & README.md).
 import { useEffect, useMemo } from 'react';
 import { RoundedBox } from '@react-three/drei';
 import {
@@ -10,12 +12,7 @@ import {
   Vector2,
 } from 'three';
 import type { Size } from '../domain/project';
-import {
-  defaultSpeakerSettings,
-  speakerPresetById,
-  type SpeakerModelId,
-  type SpeakerSettings,
-} from '../domain/speaker';
+import { defaultSpeakerSettings, speakerPresetById, type SpeakerSettings } from '../domain/speaker';
 import { PortSocket } from './PortSocket';
 
 /**
@@ -92,34 +89,6 @@ function makeSpunAluminumCapTexture(): CanvasTexture {
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
     ctx.stroke();
   }
-
-  const tex = new CanvasTexture(canvas);
-  tex.colorSpace = SRGBColorSpace;
-  tex.anisotropy = 4;
-  tex.needsUpdate = true;
-  return tex;
-}
-
-/**
- * Generates the centered pill-shaped brand nameplate texture.
- */
-function makeBrandBadgeTexture(model: SpeakerModelId): CanvasTexture {
-  const w = 256;
-  const h = 64;
-  const canvas = document.createElement('canvas');
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext('2d')!;
-
-  ctx.fillStyle = '#15181e';
-  ctx.fillRect(0, 0, w, h);
-
-  const label = model === 'edifierMr4' ? 'EDIFIER' : model === 'kantoYu4' ? 'KANTO' : 'A2+';
-  ctx.fillStyle = '#e5e9f0';
-  ctx.font = '700 28px "Segoe UI", "Inter", sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(label, w / 2, h / 2 + 1);
 
   const tex = new CanvasTexture(canvas);
   tex.colorSpace = SRGBColorSpace;
@@ -286,7 +255,6 @@ export function SpeakerModel({
 
   const tweeterMeshTex = useMemo(makeTweeterMeshTexture, []);
   const spunCapTex = useMemo(makeSpunAluminumCapTexture, []);
-  const badgeTex = useMemo(() => makeBrandBadgeTexture(cfg.model), [cfg.model]);
 
   const frontBaffleGeo = useMemo(
     () =>
@@ -308,7 +276,6 @@ export function SpeakerModel({
 
   useEffect(() => () => tweeterMeshTex.dispose(), [tweeterMeshTex]);
   useEffect(() => () => spunCapTex.dispose(), [spunCapTex]);
-  useEffect(() => () => badgeTex.dispose(), [badgeTex]);
   useEffect(
     () => () => {
       frontBaffleGeo.dispose();
@@ -320,8 +287,6 @@ export function SpeakerModel({
     [frontBaffleGeo, waveguideGeo, wooferTrimGeo, wooferConeGeo, phaseCapGeo],
   );
 
-  const badgeW = Math.min(w * 0.26, 0.036);
-  const badgeH = 0.0085;
   const badgeY = footH + cabH * 0.072;
 
   return (
@@ -415,22 +380,6 @@ export function SpeakerModel({
             metalness={0.62}
             roughness={0.24}
           />
-        </mesh>
-      </group>
-
-      {/* 底部居中胶囊形黑色品牌铭牌 */}
-      <group position={[0, badgeY, frontZ + 0.0005]}>
-        <RoundedBox
-          args={[badgeW, badgeH, 0.0016]}
-          radius={badgeH * 0.45}
-          smoothness={3}
-          castShadow
-        >
-          <meshStandardMaterial color="#14171d" roughness={0.42} metalness={0.2} />
-        </RoundedBox>
-        <mesh position={[0, 0, 0.00086]}>
-          <planeGeometry args={[badgeW * 0.82, badgeH * 0.76]} />
-          <meshBasicMaterial map={badgeTex} />
         </mesh>
       </group>
 

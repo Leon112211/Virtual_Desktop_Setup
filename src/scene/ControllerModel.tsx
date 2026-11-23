@@ -1,3 +1,5 @@
+// CS50x Final Project — DeskCraft
+// AI Assistance Disclosure: Developed under the author's design & domain rules with assistance from AI coding tools (see src/App.tsx & README.md).
 import { useEffect, useMemo } from 'react';
 import { RoundedBox } from '@react-three/drei';
 import { CanvasTexture, ExtrudeGeometry, Shape, SRGBColorSpace } from 'three';
@@ -127,28 +129,29 @@ function makeXboxLetterTexture(letter: 'A' | 'B' | 'X' | 'Y', color: string): Ca
 
 function makeXboxNexusTexture(): CanvasTexture {
   return makeButtonIconTexture('#f3f5f8', (ctx) => {
-    ctx.strokeStyle = '#475569';
-    ctx.lineWidth = 5.5;
-    ctx.lineCap = 'round';
+    ctx.strokeStyle = '#64748b';
+    ctx.lineWidth = 4.5;
     ctx.beginPath();
-    ctx.moveTo(17, 19);
-    ctx.quadraticCurveTo(32, 32, 47, 46);
-    ctx.moveTo(47, 19);
-    ctx.quadraticCurveTo(32, 32, 17, 46);
+    ctx.arc(32, 32, 13, 0, Math.PI * 2);
     ctx.stroke();
+    ctx.fillStyle = '#475569';
+    ctx.beginPath();
+    ctx.arc(32, 32, 4.2, 0, Math.PI * 2);
+    ctx.fill();
   });
 }
 
 function makePsHomeTexture(): CanvasTexture {
   return makeButtonIconTexture('#262c36', (ctx) => {
-    ctx.strokeStyle = '#cbd5e1';
+    ctx.strokeStyle = '#94a3b8';
     ctx.lineWidth = 4;
-    ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.moveTo(26, 44);
-    ctx.lineTo(26, 18);
-    ctx.arc(32, 26, 8, -Math.PI / 2, Math.PI / 2);
+    ctx.arc(32, 32, 12, 0, Math.PI * 2);
     ctx.stroke();
+    ctx.fillStyle = '#cbd5e1';
+    ctx.beginPath();
+    ctx.arc(32, 32, 3.6, 0, Math.PI * 2);
+    ctx.fill();
   });
 }
 

@@ -1,3 +1,5 @@
+// CS50x Final Project — DeskCraft
+// AI Assistance Disclosure: Developed under the author's design & domain rules with assistance from AI coding tools (see src/App.tsx & README.md).
 import { describe, expect, it } from 'vitest';
 import { Vector3 } from 'three';
 import { computeCablePath } from './cableRouting';

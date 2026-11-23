@@ -4,3 +4,7 @@ dist/
 playwright-report/
 test-results/
 .DS_Store
+*.mp4
+docs/*.pptx
+docs/*.pdf
+docs/cs50-intro-slide.html

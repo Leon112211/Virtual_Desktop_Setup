@@ -1,3 +1,5 @@
+// CS50x Final Project — DeskCraft
+// AI Assistance Disclosure: Developed under the author's design & domain rules with assistance from AI coding tools (see src/App.tsx & README.md).
 import { expect, it } from 'vitest';
 import { Box3, BoxGeometry, Group, Mesh, Vector3 } from 'three';
 import { unitBounds } from './unitBounds';

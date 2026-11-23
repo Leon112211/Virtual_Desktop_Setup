@@ -1,3 +1,5 @@
+// CS50x Final Project — DeskCraft
+// AI Assistance Disclosure: Developed under the author's design & domain rules with assistance from AI coding tools (see src/App.tsx & README.md).
 import { Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import {
@@ -6,7 +8,7 @@ import {
   minCableInteriorAngleDeg,
   stepLiveCablePhysics,
 } from './cablePhysics';
-import { computeCablePath } from './cableRouting';
+import { computeCablePath, computeMonitorArmSystem } from './cableRouting';
 import {
   cableMeta,
   formatCableDisplayName,
@@ -531,5 +533,77 @@ describe('cable gravity, bending resilience, and 3D live end-switching', () => {
     };
     expect(angleAt(1)).toBeGreaterThanOrEqual(135);
     expect(angleAt(pts.length - 2)).toBeGreaterThanOrEqual(135);
+  });
+
+  it('keeps on-desk Monitor <-> Ultrabook cables strictly above the desktop when Cable Grommet & L-Shape are enabled', () => {
+    const proj = defaultProject();
+    proj.desk.return = { side: 'left', width: 0.6, extension: 0.6 };
+    proj.desk.grommet = { enabled: true, side: 'center', diameter: 0.06 };
+    const cable = proj.cables![0];
+    const resolved = computeCablePath(cable, proj)!;
+    expect(resolved).toBeTruthy();
+
+    // Every single sampled point and mid-segment sample must stay >= desk.height (never falling into grommet or under slab)
+    for (let i = 0; i < resolved.points.length; i++) {
+      expect(resolved.points[i].y).toBeGreaterThanOrEqual(proj.desk.height);
+      if (i > 0) {
+        const mid = new Vector3().lerpVectors(resolved.points[i - 1], resolved.points[i], 0.5);
+        expect(mid.y).toBeGreaterThanOrEqual(proj.desk.height);
+      }
+    }
+    expect(resolved.passedHoles.some((h) => h.id === 'desk-grommet')).toBe(false);
+  });
+
+  it('locks cables inside VESA Monitor Arm channels, wraps smoothly under the elbow, and stays on the desk', () => {
+    const store = useEditor;
+    store.getState().replace(defaultProject(), new Map());
+    store.getState().add('monitorArm');
+    store.getState().add('speaker');
+    const speaker = store.getState().project.items.find((i) => i.kind === 'speaker')!;
+    store.getState().updateItem(speaker.id, { x: -0.34, z: -0.18 });
+
+    const proj = store.getState().project;
+    const arm = proj.items.find((i) => i.kind === 'monitorArm')!;
+    const cable = proj.cables![0];
+    expect(cable.routeViaArm).toBe(true);
+
+    const sys = computeMonitorArmSystem(arm, proj.items, proj.desk);
+    const branch = sys.branches[0];
+    const resolved = computeCablePath(cable, proj)!;
+    expect(resolved).toBeTruthy();
+    expect(resolved.shortfallM).toBe(0);
+
+    const distPointToPolyline = (target: Vector3, poly: Vector3[]) => {
+      let best = Infinity;
+      for (let i = 1; i < poly.length; i++) {
+        const a = poly[i - 1];
+        const b = poly[i];
+        const ab = new Vector3().subVectors(b, a);
+        const lenSq = ab.lengthSq();
+        const t =
+          lenSq > 1e-8
+            ? Math.max(0, Math.min(1, new Vector3().subVectors(target, a).dot(ab) / lenSq))
+            : 0;
+        const projPt = new Vector3().copy(a).addScaledVector(ab, t);
+        best = Math.min(best, projPt.distanceTo(target));
+      }
+      return best;
+    };
+
+    // Every upper-arm, lower-arm, and turret clip point stays tightly locked (< 5 mm) to the solved cable
+    for (const clipPt of branch.clipPoints) {
+      expect(distPointToPolyline(clipPt, resolved.points)).toBeLessThan(0.005);
+    }
+
+    // Elevated points track the arm envelope; tabletop points never swing off the desk edges
+    const minAllowedArmZ = Math.min(-proj.desk.depth / 2 + 0.008, branch.elbowPos.z - 0.008);
+    for (const pt of resolved.points) {
+      expect(pt.z).toBeGreaterThanOrEqual(minAllowedArmZ);
+      expect(pt.y).toBeGreaterThanOrEqual(proj.desk.height);
+      if (pt.y < proj.desk.height + 0.03) {
+        expect(pt.z).toBeGreaterThanOrEqual(-proj.desk.depth / 2 + 0.015);
+        expect(Math.abs(pt.x)).toBeLessThanOrEqual(proj.desk.width / 2 - 0.015);
+      }
+    }
   });
 });

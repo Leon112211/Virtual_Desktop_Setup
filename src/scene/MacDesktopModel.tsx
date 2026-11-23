@@ -1,3 +1,5 @@
+// CS50x Final Project — DeskCraft
+// AI Assistance Disclosure: Developed under the author's design & domain rules with assistance from AI coding tools (see src/App.tsx & README.md).
 import { useEffect, useMemo } from 'react';
 import { CanvasTexture, ExtrudeGeometry, SRGBColorSpace, Shape } from 'three';
 import type { Size } from '../domain/project';
@@ -39,52 +41,6 @@ function squircleGeometry(
   geo.translate(0, bevel, 0);
   geo.computeVertexNormals();
   return geo;
-}
-
-/**
- * Generates a transparent-background glossy anodized Apple emblem CanvasTexture
- * centered for flush placement atop the machined aluminum top shell.
- */
-function makeTopAppleEmblemTexture(): CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 512;
-  const ctx = canvas.getContext('2d')!;
-  ctx.clearRect(0, 0, 512, 512);
-
-  ctx.save();
-  ctx.translate(256, 266);
-  ctx.scale(3.15, 3.15);
-
-  const grad = ctx.createLinearGradient(-20, -28, 20, 24);
-  grad.addColorStop(0, '#3e4652');
-  grad.addColorStop(0.45, '#2b313a');
-  grad.addColorStop(1, '#1d2229');
-  ctx.fillStyle = grad;
-
-  ctx.beginPath();
-  ctx.moveTo(0, -10);
-  ctx.bezierCurveTo(6, -15, 15, -13, 18, -7);
-  ctx.bezierCurveTo(12, -3, 12, 6, 18, 10);
-  ctx.bezierCurveTo(15, 16, 10, 21, 5, 21);
-  ctx.bezierCurveTo(2, 21, 1, 19, -1, 19);
-  ctx.bezierCurveTo(-3, 19, -4, 21, -7, 21);
-  ctx.bezierCurveTo(-13, 21, -19, 13, -19, 2);
-  ctx.bezierCurveTo(-19, -9, -11, -14, -5, -13);
-  ctx.bezierCurveTo(-2, -13, 0, -10, 0, -10);
-  ctx.closePath();
-  ctx.fill();
-
-  ctx.beginPath();
-  ctx.ellipse(3.5, -20.5, 4.2, 7.8, 0.48, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-
-  const tex = new CanvasTexture(canvas);
-  tex.colorSpace = SRGBColorSpace;
-  tex.anisotropy = 4;
-  tex.needsUpdate = true;
-  return tex;
 }
 
 /**
@@ -400,7 +356,6 @@ export function MacDesktopModel({
     () => squircleGeometry(w, d, bodyH, cornerR, isM4Mini ? 0.0007 : 0.0009),
     [w, d, bodyH, cornerR, isM4Mini],
   );
-  const emblemTex = useMemo(() => makeTopAppleEmblemTexture(), []);
   const exhaustTex = useMemo(() => (isStudio ? makeStudioExhaustTexture() : null), [isStudio]);
   const studioBaseTex = useMemo(() => (isStudio ? makeStudioBaseMeshTexture() : null), [isStudio]);
   const studioRearIconsTex = useMemo(
@@ -414,15 +369,11 @@ export function MacDesktopModel({
   );
 
   useEffect(() => () => bodyGeo.dispose(), [bodyGeo]);
-  useEffect(() => () => emblemTex.dispose(), [emblemTex]);
   useEffect(() => () => exhaustTex?.dispose(), [exhaustTex]);
   useEffect(() => () => studioBaseTex?.dispose(), [studioBaseTex]);
   useEffect(() => () => studioRearIconsTex?.dispose(), [studioRearIconsTex]);
   useEffect(() => () => miniVentTex?.dispose(), [miniVentTex]);
   useEffect(() => () => miniRearIconsTex?.dispose(), [miniRearIconsTex]);
-
-  // Top emblem sizing: ~29 mm visual span on compact mini, ~40 mm on Mac Studio
-  const emblemPlane = isStudio ? 0.088 : isM4Mini ? 0.062 : 0.08;
 
   // Front port cluster elevation inside aluminum housing
   const frontY = isStudio
@@ -448,21 +399,6 @@ export function MacDesktopModel({
           emissiveIntensity={0.14}
           metalness={0.22}
           roughness={0.38}
-        />
-      </mesh>
-
-      {/* Flush top-centered dark glossy anodized Apple emblem */}
-      <mesh position={[0, h + 0.00018, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[emblemPlane, emblemPlane]} />
-        <meshStandardMaterial
-          map={emblemTex}
-          transparent
-          alphaTest={0.05}
-          metalness={0.55}
-          roughness={0.22}
-          depthWrite={false}
-          polygonOffset
-          polygonOffsetFactor={-1}
         />
       </mesh>
 

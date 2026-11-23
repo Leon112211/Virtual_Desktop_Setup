@@ -1,3 +1,5 @@
+// CS50x Final Project — DeskCraft
+// AI Assistance Disclosure: Developed under the author's design & domain rules with assistance from AI coding tools (see src/App.tsx & README.md).
 import { Vector3 } from 'three';
 import {
   deskBackWallBounds,
@@ -344,57 +346,25 @@ export function getSceneSolidBoxes(
   const boxes: SolidBox[] = [];
   const exclude = options.excludeItemIds;
 
-  // 1. Desk slab(s), split cleanly around grommet hole when enabled so cables can drop inside grommet.
+  // 1. Desk slab(s): keep each support slab undivided (zero internal seam cracks);
+  //    grommet pass-throughs are handled cylindrically via `findContainingHole` when a cable actually routes through the grommet.
   const rects = deskSupportRects(desk);
-  const grommet = grommetPosition(desk);
   const minDeskY = desk.height - desk.thickness;
   const maxDeskY = desk.height;
 
   rects.forEach((rect, idx) => {
-    const insideGrommet =
-      idx === 0 &&
-      grommet &&
-      grommet.x > rect.minX &&
-      grommet.x < rect.maxX &&
-      grommet.z > rect.minZ &&
-      grommet.z < rect.maxZ;
-    if (!insideGrommet || !grommet) {
-      boxes.push({
-        id: `desk-top-${idx}`,
-        label: '桌面主体',
-        kind: 'desk',
-        cx: (rect.minX + rect.maxX) / 2,
-        cz: (rect.minZ + rect.maxZ) / 2,
-        halfW: (rect.maxX - rect.minX) / 2,
-        halfD: (rect.maxZ - rect.minZ) / 2,
-        yaw: 0,
-        minY: minDeskY,
-        maxY: maxDeskY,
-      });
-    } else {
-      const hr = grommet.diameter / 2;
-      const strips: [string, number, number, number, number][] = [
-        ['desk-g-left', rect.minX, grommet.x - hr, rect.minZ, rect.maxZ],
-        ['desk-g-right', grommet.x + hr, rect.maxX, rect.minZ, rect.maxZ],
-        ['desk-g-back', grommet.x - hr, grommet.x + hr, rect.minZ, grommet.z - hr],
-        ['desk-g-front', grommet.x - hr, grommet.x + hr, grommet.z + hr, rect.maxZ],
-      ];
-      for (const [id, x0, x1, z0, z1] of strips) {
-        if (x1 - x0 < 0.004 || z1 - z0 < 0.004) continue;
-        boxes.push({
-          id,
-          label: '桌面主体',
-          kind: 'desk',
-          cx: (x0 + x1) / 2,
-          cz: (z0 + z1) / 2,
-          halfW: (x1 - x0) / 2,
-          halfD: (z1 - z0) / 2,
-          yaw: 0,
-          minY: minDeskY,
-          maxY: maxDeskY,
-        });
-      }
-    }
+    boxes.push({
+      id: `desk-top-${idx}`,
+      label: '桌面主体',
+      kind: 'desk',
+      cx: (rect.minX + rect.maxX) / 2,
+      cz: (rect.minZ + rect.maxZ) / 2,
+      halfW: (rect.maxX - rect.minX) / 2,
+      halfD: (rect.maxZ - rect.minZ) / 2,
+      yaw: 0,
+      minY: minDeskY,
+      maxY: maxDeskY,
+    });
   });
 
   // 2. Desk legs under each support corner.
@@ -1109,9 +1079,17 @@ export function resolveSegmentClearance(
   solids: SolidBox[],
   holes: CableHole[],
   allowedItemIds: Set<string>,
+  lockedChannelPts?: readonly Vector3[],
 ): { points: Vector3[]; adjusted: boolean } {
   if (points.length < 2) return { points: points.map((p) => p.clone()), adjusted: false };
   const padRadius = radius + 0.003;
+  const isLockedChannelSeg = (p0: Vector3, p1: Vector3) =>
+    Boolean(
+      lockedChannelPts &&
+      lockedChannelPts.length > 0 &&
+      lockedChannelPts.some((c) => c.distanceToSquared(p0) < 1e-6) &&
+      lockedChannelPts.some((c) => c.distanceToSquared(p1) < 1e-6),
+    );
 
   // Step 1: Any segment jumping between above-surface and below-slab outside a grommet
   // wraps cleanly around the nearest desk/shelf edge via a smooth rounded outer arc.
@@ -1122,7 +1100,7 @@ export function resolveSegmentClearance(
     const a = wrapped[wrapped.length - 1];
     const b = points[i];
     const isEndStub = i === 1 || i === points.length - 1;
-    if (!isEndStub) {
+    if (!isEndStub && !isLockedChannelSeg(a, b)) {
       for (const box of solids) {
         if (box.kind !== 'desk' && box.kind !== 'shelf') continue;
         if (box.itemId && allowedItemIds.has(box.itemId)) continue;
@@ -1215,7 +1193,7 @@ export function resolveSegmentClearance(
     const b = wrapped[i];
     const isEndStub = i === 1 || i === wrapped.length - 1;
     let detoured = false;
-    if (!isEndStub && a.distanceToSquared(b) > 1e-6) {
+    if (!isEndStub && !isLockedChannelSeg(a, b) && a.distanceToSquared(b) > 1e-6) {
       for (const box of solids) {
         if (box.kind === 'desk' || box.kind === 'shelf' || box.kind === 'wall') continue;
         if (isAllowedSolidForCable(box, allowedItemIds)) continue;
@@ -1321,7 +1299,7 @@ export function resolveSegmentClearance(
     const a = boxWrapped[i - 1];
     const b = boxWrapped[i];
     const isEndStub = i === 1 || i === wrapped.length - 1;
-    if (isEndStub) {
+    if (isEndStub || isLockedChannelSeg(a, b)) {
       out.push(b.clone());
       continue;
     }

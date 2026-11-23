@@ -1,3 +1,5 @@
+// CS50x Final Project — DeskCraft
+// AI Assistance Disclosure: Developed under the author's design & domain rules with assistance from AI coding tools (see src/App.tsx & README.md).
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { useThree, type ThreeEvent } from '@react-three/fiber';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
@@ -18,6 +20,7 @@ import { MAX_PITCH, MAX_ROLL, MAX_SCREEN_YAW, monitorParts, monitorPose } from '
 import { normalizeRotationDeg } from '../domain/monitorArm';
 import type { SceneItem } from '../domain/project';
 import { useEditor } from '../store/editorStore';
+import { tr } from '../i18n';
 
 type AxisKind = 'yaw' | 'screenYaw' | 'pitch' | 'roll' | 'lid';
 
@@ -426,7 +429,7 @@ export function ItemRotateGizmo({
           rotation,
           hitObstacle: lastHitObstacle,
         }),
-      onCommit: (rotation) => commitPatch({ rotation }, '无法旋转物品'),
+      onCommit: (rotation) => commitPatch({ rotation }, tr('无法旋转物品', 'Cannot rotate item')),
       onClick:
         clickStepDeg === null
           ? undefined
@@ -434,7 +437,7 @@ export function ItemRotateGizmo({
               const mult = shift ? 2 : 1;
               commitPatch(
                 { rotation: normalizeRotationDeg(startRot + clickStepDeg * mult) },
-                '无法旋转物品',
+                tr('无法旋转物品', 'Cannot rotate item'),
               );
             },
     });
@@ -510,11 +513,12 @@ export function ItemRotateGizmo({
           value,
           hitObstacle: lastHitObstacle,
         }),
-      onCommit: (screenYaw) => commitPatch({ screenYaw }, '无法左右旋转屏幕'),
+      onCommit: (screenYaw) =>
+        commitPatch({ screenYaw }, tr('无法左右旋转屏幕', 'Cannot swivel screen')),
       onClick: () => {
         const next =
           startScreenYaw + 15 > MAX_SCREEN_YAW ? -MAX_SCREEN_YAW : roundTenth(startScreenYaw + 15);
-        commitPatch({ screenYaw: next }, '无法左右旋转屏幕');
+        commitPatch({ screenYaw: next }, tr('无法左右旋转屏幕', 'Cannot swivel screen'));
       },
     });
   }
@@ -569,10 +573,10 @@ export function ItemRotateGizmo({
           value,
           hitObstacle: lastHitObstacle,
         }),
-      onCommit: (pitch) => commitPatch({ pitch }, '无法调节俯仰角度'),
+      onCommit: (pitch) => commitPatch({ pitch }, tr('无法调节俯仰角度', 'Cannot adjust tilt')),
       onClick: () => {
         const stepped = startPitch + 5 > maxPitch ? minPitch : roundTenth(startPitch + 5);
-        commitPatch({ pitch: stepped }, '无法调节俯仰角度');
+        commitPatch({ pitch: stepped }, tr('无法调节俯仰角度', 'Cannot adjust tilt'));
       },
     });
   }
@@ -623,11 +627,11 @@ export function ItemRotateGizmo({
           value,
           hitObstacle: lastHitObstacle,
         }),
-      onCommit: (roll) => commitPatch({ roll }, '无法翻转屏幕'),
+      onCommit: (roll) => commitPatch({ roll }, tr('无法翻转屏幕', 'Cannot pivot screen')),
       onClick: (shift) => {
         const step = shift ? 90 : 45;
         const next = startRoll + step > MAX_ROLL ? -MAX_ROLL : roundTenth(startRoll + step);
-        commitPatch({ roll: next }, '无法翻转屏幕');
+        commitPatch({ roll: next }, tr('无法翻转屏幕', 'Cannot pivot screen'));
       },
     });
   }
@@ -666,10 +670,11 @@ export function ItemRotateGizmo({
       screenFallbackDegPerPx: 0.45,
       onPreview: (value) =>
         useEditor.getState().setDragPreview({ kind: 'pose', id: item.id, axis: 'lidAngle', value }),
-      onCommit: (nextLid) => commitPatch({ lidAngle: nextLid }, '无法调节屏幕开合角'),
+      onCommit: (nextLid) =>
+        commitPatch({ lidAngle: nextLid }, tr('无法调节屏幕开合角', 'Cannot adjust lid angle')),
       onClick: () => {
         const next = startLid < 20 ? 110 : startLid < 130 ? MAX_LID_ANGLE : 0;
-        commitPatch({ lidAngle: next }, '无法调节屏幕开合角');
+        commitPatch({ lidAngle: next }, tr('无法调节屏幕开合角', 'Cannot adjust lid angle'));
       },
     });
   }

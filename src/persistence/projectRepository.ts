@@ -1,3 +1,5 @@
+// CS50x Final Project — DeskCraft
+// AI Assistance Disclosure: Developed under the author's design & domain rules with assistance from AI coding tools (see src/App.tsx & README.md).
 import { openDB, type DBSchema } from 'idb';
 import { projectSchema, type Project } from '../domain/project';
 import { removeRetiredItems } from './legacyProject';

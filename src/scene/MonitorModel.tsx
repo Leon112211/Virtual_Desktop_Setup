@@ -1,3 +1,5 @@
+// CS50x Final Project — DeskCraft
+// AI Assistance Disclosure: Developed under the author's design & domain rules with assistance from AI coding tools (see src/App.tsx & README.md).
 import { useEffect, useMemo } from 'react';
 import { RoundedBox, useTexture } from '@react-three/drei';
 import { useThree } from '@react-three/fiber';
@@ -437,20 +439,6 @@ function makeDellRearTexture(bodyHex: string): CanvasTexture {
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, 512, 512);
 
-  // Embossed brushed DELL emblem centered cleanly above the VESA collar
-  ctx.save();
-  ctx.strokeStyle = 'rgba(66, 76, 90, 0.52)';
-  ctx.lineWidth = 2.4;
-  ctx.beginPath();
-  ctx.arc(256, 120, 30, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.fillStyle = 'rgba(60, 70, 84, 0.78)';
-  ctx.font = 'bold 20px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('DELL', 256, 121);
-  ctx.restore();
-
   const tex = new CanvasTexture(canvas);
   tex.colorSpace = SRGBColorSpace;
   tex.anisotropy = 4;
@@ -582,28 +570,6 @@ function makeStudioRearTexture(bodyHex: string): CanvasTexture {
     ctx.arc(x, 12, 1.3, 0, Math.PI * 2);
     ctx.fill();
   }
-
-  // Glossy dark-silver embossed Apple emblem centered above stand hinge (solid silhouette, no overlap seam)
-  ctx.save();
-  ctx.translate(256, 138);
-  ctx.scale(1.15, 1.15);
-  ctx.fillStyle = '#6b7585';
-  ctx.beginPath();
-  ctx.moveTo(0, -10);
-  ctx.bezierCurveTo(6, -15, 15, -13, 18, -7);
-  ctx.bezierCurveTo(12, -3, 12, 6, 18, 10);
-  ctx.bezierCurveTo(15, 16, 10, 21, 5, 21);
-  ctx.bezierCurveTo(2, 21, 1, 19, -1, 19);
-  ctx.bezierCurveTo(-3, 19, -4, 21, -7, 21);
-  ctx.bezierCurveTo(-13, 21, -19, 13, -19, 2);
-  ctx.bezierCurveTo(-19, -9, -11, -14, -5, -13);
-  ctx.bezierCurveTo(-2, -13, 0, -10, 0, -10);
-  ctx.closePath();
-  ctx.fill();
-  ctx.beginPath();
-  ctx.ellipse(3.5, -20.5, 4.2, 7.8, 0.48, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
 
   // Subtle vertical anodized aluminum sheen highlight
   const grad = ctx.createLinearGradient(0, 0, 512, 0);

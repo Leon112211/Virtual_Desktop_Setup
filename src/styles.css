@@ -1,3 +1,7 @@
+/* CS50x Final Project — DeskCraft
+ * AI Assistance Disclosure: UI styling and layout rules developed under the author's design
+ * direction with assistance from AI coding tools (Gemini / Claude); see src/App.tsx & README.md.
+ */
 :root {
   font-family: 'Microsoft YaHei UI', 'PingFang SC', sans-serif;
   color: #243449;
@@ -106,17 +110,48 @@ button.active {
   min-width: 213px;
 }
 .brand strong {
-  font-size: 23px;
-  letter-spacing: 2px;
+  font-size: 22px;
+  letter-spacing: 1.5px;
   font-weight: 700;
   display: flex;
   align-items: center;
   gap: 9px;
 }
-.brand strong span {
-  font-size: 14px;
-  letter-spacing: -0.5px;
-  font-weight: 650;
+.brand strong.brand-en {
+  letter-spacing: -0.4px;
+  font-size: 21px;
+}
+.lang-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: #f4f6fa;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+}
+.lang-toggle:hover {
+  border-color: #cbd5e1;
+  background: #eef2f7;
+}
+.lang-toggle span {
+  padding: 3px 9px;
+  border-radius: 999px;
+  line-height: 1.3;
+  transition:
+    background 0.16s ease,
+    color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+.lang-toggle span.active {
+  background: #ffffff;
+  color: var(--blue);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
 }
 .brand small {
   font-size: 10px;
